@@ -61,7 +61,7 @@ h3{font-size:16px;margin:20px 0 10px}
 .small{color:#8e8e93;font-size:12px;line-height:1.5}
 .hidden{display:none!important}
 #profileModal{display:none;position:fixed;inset:0;background:#0009;z-index:50;align-items:center;justify-content:center;padding:20px}
-.profile-card{width:100%;max-width:360px;background:#fff;color:#111;border-radius:18px;padding:20px}
+.profile-card{width:100%;max-width:360px;max-height:90dvh;overflow-y:auto;background:#fff;color:#111;border-radius:18px;padding:20px}
 .profile-card h3{margin:0 0 18px}
 .profile-card label{display:block;font-size:13px;color:#666;margin:12px 0 4px}
 .profile-card input{width:100%;padding:12px;border:1px solid #d1d1d6;border-radius:9px;background:#f7f7f9;color:#111}
@@ -147,6 +147,8 @@ h3{font-size:16px;margin:20px 0 10px}
     <input id="editAvatarUrl" placeholder="이미지 URL" inputmode="url">
     <label>미리보기 문구</label>
     <input id="editPreviewText" placeholder="채팅방 목록에 표시할 문구">
+    <label>채팅방 날짜</label>
+    <input id="editRoomDate" type="date">
     <div class="profile-actions">
       <button class="action secondary" id="cancelProfile">취소</button>
       <button class="action" id="saveProfile">저장</button>
@@ -326,7 +328,6 @@ $("backBtn").onclick=async()=>{
   await loadRooms();
 };
 
-/* 관리자 화면 */
 async function openAdmin(){
   $("homeView").style.display="none";
   $("chatView").style.display="none";
@@ -367,7 +368,6 @@ $("loginBtn").onclick=async()=>{
   await loadSharedMessages();
 };
 
-/* 공통 대화 관리 */
 function renderSharedRoomOptions(){
   const old=$("sharedRoomSelect").value;
   $("sharedRoomSelect").innerHTML=roomsCache.map(r=>
@@ -455,7 +455,6 @@ $("sharedMessages").addEventListener("click",async e=>{
   }
 });
 
-/* 방문자별 대화 */
 async function loadVisitorThreads(){
   const {data,error}=await db.from("messages")
     .select("room_id,visitor_id,content,created_at,sender_name,sender_type")
@@ -501,13 +500,19 @@ function renderAdminRooms(){
   </div>`).join("");
 }
 
-/* 채팅방 프로필 및 미리보기 문구 수정 */
+/* 채팅방 프로필 및 날짜 수정 */
 function openProfileEditor(room){
   editingRoomId=room.id;
   $("editRoomName").value=room.room_name||"";
   $("editPartnerName").value=room.partner_name||"";
   $("editAvatarUrl").value=room.avatar_url||"";
   $("editPreviewText").value=room.preview_text||"";
+
+  const date=room.last_message_at||room.created_at;
+  $("editRoomDate").value=date
+    ?new Date(new Date(date).getTime()-new Date(date).getTimezoneOffset()*60000).toISOString().slice(0,10)
+    :"";
+
   updateProfilePreview();
   $("profileModal").style.display="flex";
 }
@@ -533,14 +538,22 @@ $("saveProfile").onclick=async()=>{
   const partner_name=$("editPartnerName").value.trim();
   const avatar_url=$("editAvatarUrl").value.trim();
   const preview_text=$("editPreviewText").value.trim();
+  const dateValue=$("editRoomDate").value;
 
   if(!room_name||!partner_name){
     alert("채팅방 이름과 상대방 이름을 입력해 주세요.");
     return;
   }
 
+  if(!dateValue){
+    alert("채팅방 날짜를 선택해 주세요.");
+    return;
+  }
+
+  const last_message_at=new Date(dateValue+"T12:00:00").toISOString();
+
   const {data,error}=await db.from("rooms")
-    .update({room_name,partner_name,avatar_url,preview_text})
+    .update({room_name,partner_name,avatar_url,preview_text,last_message_at})
     .eq("id",editingRoomId)
     .select();
 
@@ -556,7 +569,7 @@ $("saveProfile").onclick=async()=>{
 
   closeProfileEditor();
   await loadRooms();
-  alert("프로필을 수정했어요!");
+  alert("프로필과 날짜를 수정했어요!");
 };
 
 $("adminRooms").addEventListener("click",async e=>{
