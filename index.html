@@ -57,6 +57,7 @@ header{padding:calc(env(safe-area-inset-top) + 15px) 20px 0;background:#000}
 .danger{background:#ff453a;color:#fff}
 .admin-room,.thread,.shared-item{padding:13px;border-bottom:1px solid #e5e5ea}
 .admin-room button,.thread button,.shared-item button{margin-top:8px}
+.admin-room button:disabled{opacity:.35;cursor:default}
 h3{font-size:16px;margin:20px 0 10px}
 .small{color:#8e8e93;font-size:12px;line-height:1.5}
 .hidden{display:none!important}
@@ -496,6 +497,8 @@ function renderAdminRooms(){
     <strong>${esc(r.room_name)}</strong>
     <div class="small">${esc(r.partner_name)} · ${r.is_open?"대화 가능":"미리보기"}</div>
     <button class="action" data-toggle="${esc(r.id)}" data-open="${!r.is_open}">${r.is_open?"대화 닫기":"대화 열기"}</button>
+    <button class="action secondary" data-move-room="${esc(r.id)}" data-direction="-1" ${roomsCache.indexOf(r)===0?"disabled":""}>↑ 위로</button>
+    <button class="action secondary" data-move-room="${esc(r.id)}" data-direction="1" ${roomsCache.indexOf(r)===roomsCache.length-1?"disabled":""}>↓ 아래로</button>
     <button class="action secondary" data-edit-room="${esc(r.id)}">프로필 수정</button>
   </div>`).join("");
 }
@@ -572,7 +575,34 @@ $("saveProfile").onclick=async()=>{
   alert("프로필과 날짜를 수정했어요!");
 };
 
+/* 채팅방 순서 변경 */
+async function moveRoom(roomId,direction){
+  const index=roomsCache.findIndex(r=>String(r.id)===String(roomId));
+  const nextIndex=index+Number(direction);
+  if(index<0||nextIndex<0||nextIndex>=roomsCache.length)return;
+
+  const reordered=[...roomsCache];
+  [reordered[index],reordered[nextIndex]]=[reordered[nextIndex],reordered[index]];
+
+  for(let i=0;i<reordered.length;i++){
+    const {error}=await db.from("rooms")
+      .update({sort_order:i})
+      .eq("id",reordered[i].id);
+    if(error){
+      alert("채팅방 순서 변경 실패: "+error.message);
+      await loadRooms();
+      return;
+    }
+  }
+  await loadRooms();
+}
+
 $("adminRooms").addEventListener("click",async e=>{
+  const move=e.target.closest("[data-move-room]");
+  if(move){
+    await moveRoom(move.dataset.moveRoom,move.dataset.direction);
+    return;
+  }
   const edit=e.target.closest("[data-edit-room]");
   if(edit){
     const room=roomsCache.find(r=>String(r.id)===edit.dataset.editRoom);
