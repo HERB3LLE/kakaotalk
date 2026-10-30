@@ -1,88 +1,80 @@
-
 <!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>채팅</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>메시지</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box}
-body{margin:0;background:#111;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif}
+body{margin:0;background:#f2f2f7;color:#111;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Apple SD Gothic Neo",sans-serif}
 button,input{font:inherit}
 button{cursor:pointer}
-#app{max-width:520px;min-height:100dvh;margin:auto;background:#171717;position:relative;padding-bottom:76px}
-header{height:65px;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;font-size:23px;font-weight:750}
-.header-icons{display:flex;gap:20px;font-size:21px}
-#banner{margin:5px 15px 17px;height:105px;border-radius:12px;background:#292929;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#aaa}
-#banner img{width:100%;height:100%;object-fit:cover}
-.search{margin:0 15px 12px;background:#292929;border-radius:9px;padding:11px 13px;color:#999}
-.search input{background:none;border:0;outline:0;color:white;width:90%}
-.room{display:flex;align-items:center;padding:12px 17px;gap:12px;min-height:78px;border-bottom:1px solid #252525}
-.avatar{width:49px;height:49px;border-radius:18px;background:#343434;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;font-size:22px}
+#app{max-width:520px;min-height:100dvh;margin:auto;background:#fff;position:relative;overflow:hidden}
+header{height:65px;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;background:#fafafa;border-bottom:1px solid #e5e5ea}
+#pageTitle{font-size:29px;font-weight:750}
+.header-icons{font-size:23px;color:#087aff}
+#banner{display:none}
+.search{margin:10px 16px;background:#f1f1f6;border-radius:11px;padding:10px 12px;color:#8e8e93}
+.search input{background:none;border:0;outline:0;color:#111;width:90%;font-size:16px}
+.room{display:flex;align-items:center;padding:11px 16px;gap:12px;min-height:78px;border-bottom:1px solid #e5e5ea;background:#fff}
+.avatar{width:52px;height:52px;border-radius:50%;background:#d9d9de;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;font-size:22px;color:#fff}
 .avatar img{width:100%;height:100%;object-fit:cover}
 .room-info{min-width:0;flex:1}
-.room-name{font-weight:650;font-size:16px;margin-bottom:6px}
-.preview{font-size:13px;color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.time{font-size:11px;color:#777}
-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(100%,520px);height:67px;background:#202020;border-top:1px solid #303030;display:flex;justify-content:space-around;align-items:center;z-index:5}
-nav button{background:none;border:0;color:#888;font-size:11px;display:flex;flex-direction:column;gap:4px;align-items:center}
-nav button span{font-size:22px}
-nav button.active{color:#fff}
-#chatView,#adminView{display:none;position:absolute;inset:0;background:#171717;z-index:4;min-height:100dvh;padding-bottom:0}
-.chat-head{height:62px;display:flex;align-items:center;padding:0 16px;border-bottom:1px solid #303030;gap:18px}
-.chat-head button{background:none;border:0;color:white;font-size:24px}
-.chat-head strong{font-size:17px}
-#messages{height:calc(100dvh - 132px);overflow-y:auto;padding:16px}
-.msg{margin:12px 0;display:flex;flex-direction:column;align-items:flex-start}
+.room-name{font-weight:650;font-size:16px;margin-bottom:5px}
+.preview{font-size:14px;color:#8e8e93;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.time{font-size:12px;color:#8e8e93;align-self:flex-start;margin-top:3px}
+nav{display:none}
+#chatView,#adminView{display:none;position:fixed;inset:0;background:#fff;z-index:8;min-height:100dvh;max-width:520px;margin:auto;flex-direction:column}
+.chat-head{height:60px;min-height:60px;display:flex;align-items:center;padding:0 15px;border-bottom:1px solid #e5e5ea;gap:12px;background:#fafafa}
+.chat-head button{background:none;border:0;color:#087aff;font-size:30px;line-height:1;padding:0 4px}
+.chat-head strong{font-size:17px;font-weight:650;color:#111}
+#messages{flex:1;min-height:0;overflow-y:auto;padding:16px 13px 18px;background:#fff;display:flex;flex-direction:column}
+.msg{margin:5px 0;display:flex;flex-direction:column;align-items:flex-start;max-width:100%}
 .msg.mine{align-items:flex-end}
-.msg-name{font-size:11px;color:#aaa;margin-bottom:5px}
-.bubble{max-width:78%;padding:10px 13px;border-radius:13px;background:#303030;line-height:1.45;overflow-wrap:anywhere}
-.mine .bubble{background:#fee500;color:#222}
-.msg-time{font-size:10px;color:#777;margin-top:4px}
-#sendForm{height:68px;display:flex;gap:8px;padding:10px;background:#252525}
-#sendInput{flex:1;min-width:0;border:0;border-radius:20px;padding:0 15px;background:#393939;color:white;outline:0}
-#sendForm button{border:0;border-radius:20px;background:#fee500;color:#222;padding:0 18px;font-weight:bold}
-.panel{padding:18px;overflow-y:auto;height:calc(100dvh - 62px)}
-.panel input{width:100%;padding:12px;margin:6px 0 12px;border:1px solid #444;border-radius:8px;background:#292929;color:white}
-.action{padding:11px 14px;border:0;border-radius:8px;background:#fee500;color:#222;font-weight:650;margin:4px 4px 4px 0}
-.secondary{background:#383838;color:white}
-.admin-room,.thread{padding:13px;border-bottom:1px solid #333}
+.msg-name{font-size:12px;color:#8e8e93;margin:0 0 4px 8px}
+.bubble{max-width:78%;padding:9px 14px;border-radius:19px;background:#e9e9eb;color:#111;line-height:1.4;overflow-wrap:anywhere;font-size:16px}
+.mine .bubble{background:#087eff;color:white}
+.msg-time{font-size:10px;color:#a1a1a6;margin:3px 7px 0}
+#sendForm{height:66px;min-height:66px;display:flex;align-items:center;gap:9px;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:#f9f9fb;border-top:1px solid #e5e5ea}
+#sendInput{flex:1;min-width:0;height:40px;border:1px solid #d1d1d6;border-radius:20px;padding:0 15px;background:#fff;color:#111;outline:0;font-size:16px}
+#sendForm button{border:0;border-radius:18px;background:#087eff;color:#fff;padding:9px 15px;font-weight:650;font-size:14px}
+.panel{padding:18px;overflow-y:auto;height:calc(100dvh - 60px);background:#fff}
+.panel input{width:100%;padding:12px;margin:6px 0 12px;border:1px solid #d1d1d6;border-radius:9px;background:#f7f7f9;color:#111}
+.action{padding:11px 14px;border:0;border-radius:9px;background:#087eff;color:#fff;font-weight:650;margin:4px 4px 4px 0}
+.secondary{background:#e5e5ea;color:#111}
+.admin-room,.thread{padding:13px;border-bottom:1px solid #e5e5ea}
 .admin-room button,.thread button{margin-top:8px}
 h3{font-size:16px;margin:20px 0 10px}
-.small{color:#999;font-size:12px;line-height:1.5}
+.small{color:#8e8e93;font-size:12px;line-height:1.5}
 .hidden{display:none!important}
+body>button{position:fixed!important;right:10px!important;bottom:10px!important;z-index:7!important;background:transparent!important;color:#a1a1a6!important;border:0!important;padding:5px 8px!important;font-size:10px!important}
 </style>
 </head>
 <body>
 <div id="app">
 <header>
-  <span id="pageTitle">채팅</span>
-  <div class="header-icons"><span>⌕</span><span>⚙</span></div>
+  <span id="pageTitle">메시지</span>
+  <div class="header-icons">✎</div>
 </header>
 
 <div id="homeView">
   <div id="banner">배너 이미지</div>
-  <div class="search">⌕ <input id="searchInput" placeholder="채팅방 검색"></div>
+  <div class="search">⌕ <input id="searchInput" placeholder="검색"></div>
   <div id="roomList"></div>
 </div>
 
-<nav>
-  <button class="active"><span>👤</span>친구</button>
-  <button class="active"><span>▣</span>채팅</button>
-  <button><span>◉</span>오픈채팅</button>
-  <button><span>⋯</span>더보기</button>
-</nav>
+<nav></nav>
 
 <section id="chatView">
   <div class="chat-head">
     <button id="backBtn">‹</button>
-    <strong id="chatTitle">채팅</strong>
+    <strong id="chatTitle">메시지</strong>
   </div>
   <div id="messages"></div>
   <form id="sendForm">
-    <input id="sendInput" placeholder="메시지를 입력하세요" autocomplete="off">
-    <button>전송</button>
+    <input id="sendInput" placeholder="메시지" autocomplete="off">
+    <button>↑</button>
   </form>
 </section>
 
@@ -123,321 +115,322 @@ const SUPABASE_URL = "https://ieblvlcqngmmiwpvrzoq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_XFHlSKeuFq_OuXKrSzRU0A_uOA9c8VT";
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-let currentUser = null;
-let currentRoom = null;
-let currentRoomName = "";
-let currentPartner = "";
-let currentVisitorId = null;
-let isAdmin = false;
-let realtimeChannel = null;
-let roomsCache = [];
+let currentUser=null;
+let currentRoom=null;
+let currentRoomName="";
+let currentPartner="";
+let currentVisitorId=null;
+let isAdmin=false;
+let realtimeChannel=null;
+let roomsCache=[];
 
-const $ = id => document.getElementById(id);
-const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({
-  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({
+"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
 }[c]));
 
-async function start() {
-  const {data:{session}} = await db.auth.getSession();
-  if (session) {
-    currentUser = session.user;
-  } else {
-    const {data,error} = await db.auth.signInAnonymously();
-    if (error) {
+async function start(){
+  const {data:{session}}=await db.auth.getSession();
+  if(session){
+    currentUser=session.user;
+  }else{
+    const {data,error}=await db.auth.signInAnonymously();
+    if(error){
       alert("익명 인증에 실패했어요. Supabase의 Anonymous Sign-ins 설정을 확인해 주세요.\n"+error.message);
       return;
     }
-    currentUser = data.user;
+    currentUser=data.user;
   }
   await loadRooms();
 }
 
-async function loadRooms() {
-  const {data,error} = await db.from("rooms")
+async function loadRooms(){
+  const {data,error}=await db.from("rooms")
     .select("*").order("sort_order").order("created_at");
-  if (error) {
-    $("roomList").textContent = "채팅방을 불러오지 못했어요.";
+  if(error){
+    $("roomList").textContent="채팅방을 불러오지 못했어요.";
     console.error(error);
     return;
   }
-  roomsCache = data || [];
+  roomsCache=data||[];
   renderRooms();
-  if (isAdmin) renderAdminRooms();
+  if(isAdmin)renderAdminRooms();
 }
 
-function renderRooms() {
-  const q = $("searchInput").value.toLowerCase();
-  const visible = roomsCache.filter(r =>
-    (r.room_name || "").toLowerCase().includes(q) ||
-    (r.partner_name || "").toLowerCase().includes(q)
+function renderRooms(){
+  const q=$("searchInput").value.toLowerCase();
+  const visible=roomsCache.filter(r=>
+    (r.room_name||"").toLowerCase().includes(q)||
+    (r.partner_name||"").toLowerCase().includes(q)
   );
-  $("roomList").innerHTML = visible.map(r => `
-    <div class="room" data-room="${r.id}" style="opacity:${r.is_open ? 1 : .8}">
-      <div class="avatar">${r.avatar_url ? `<img src="${esc(r.avatar_url)}">` : "●"}</div>
+  $("roomList").innerHTML=visible.map(r=>`
+    <div class="room" data-room="${r.id}" style="opacity:${r.is_open?1:.8}">
+      <div class="avatar">${r.avatar_url?`<img src="${esc(r.avatar_url)}">`:"●"}</div>
       <div class="room-info">
         <div class="room-name">${esc(r.room_name)}</div>
-        <div class="preview">${esc(r.preview_text || "대화를 시작해 보세요.")}</div>
+        <div class="preview">${esc(r.preview_text||"대화를 시작해 보세요.")}</div>
       </div>
-      <div class="time">${r.is_open ? "" : "미리보기"}</div>
+      <div class="time">${r.is_open?"":"미리보기"}</div>
     </div>`).join("");
 }
 
 $("searchInput").addEventListener("input",renderRooms);
 
-$("roomList").addEventListener("click", async e => {
-  const item = e.target.closest("[data-room]");
-  if (!item) return;
-  const room = roomsCache.find(r => r.id === item.dataset.room);
-  if (!room) return;
-  if (!room.is_open) {
+$("roomList").addEventListener("click",async e=>{
+  const item=e.target.closest("[data-room]");
+  if(!item)return;
+  const room=roomsCache.find(r=>r.id===item.dataset.room);
+  if(!room)return;
+  if(!room.is_open){
     alert("아직 대화할 수 없는 채팅방이에요.");
     return;
   }
-  if (!isAdmin) {
-    let name = localStorage.getItem("chat_display_name");
-    if (!name) {
-      name = prompt("채팅에서 사용할 이름을 입력해 주세요.");
-      if (!name || !name.trim()) return;
-      name = name.trim().slice(0,30);
+  if(!isAdmin){
+    let name=localStorage.getItem("chat_display_name");
+    if(!name){
+      name=prompt("채팅에서 사용할 이름을 입력해 주세요.");
+      if(!name||!name.trim())return;
+      name=name.trim().slice(0,30);
       localStorage.setItem("chat_display_name",name);
     }
-    currentVisitorId = currentUser.id;
+    currentVisitorId=currentUser.id;
   }
   await openChat(room);
 });
 
-async function openChat(room, visitorId=null) {
-  currentRoom = room.id;
-  currentRoomName = room.room_name;
-  currentPartner = room.partner_name;
-  if (isAdmin && visitorId) currentVisitorId = visitorId;
-  $("chatTitle").textContent = room.room_name;
-  $("homeView").style.display = "none";
-  $("chatView").style.display = "block";
-  $("adminView").style.display = "none";
-  $("messages").innerHTML = "";
+async function openChat(room,visitorId=null){
+  currentRoom=room.id;
+  currentRoomName=room.room_name;
+  currentPartner=room.partner_name;
+  if(isAdmin&&visitorId)currentVisitorId=visitorId;
+  $("chatTitle").textContent=room.partner_name||room.room_name;
+  $("homeView").style.display="none";
+  $("chatView").style.display="flex";
+  $("adminView").style.display="none";
+  $("messages").innerHTML="";
   await loadMessages();
-  if (realtimeChannel) await db.removeChannel(realtimeChannel);
-  let channel = db.channel("chat-"+room.id+"-"+(currentVisitorId || "admin"));
+
+  if(realtimeChannel)await db.removeChannel(realtimeChannel);
+  let channel=db.channel("chat-"+room.id+"-"+(currentVisitorId||"admin"));
   channel.on("postgres_changes",{
     event:"INSERT",schema:"public",table:"messages",
     filter:"room_id=eq."+room.id
-  }, payload => {
-    const m = payload.new;
-    if (isAdmin || m.visitor_id === currentUser.id) {
-      if (isAdmin && currentVisitorId && m.visitor_id !== currentVisitorId) return;
+  },payload=>{
+    const m=payload.new;
+    if(isAdmin||m.visitor_id===currentUser.id){
+      if(isAdmin&&currentVisitorId&&m.visitor_id!==currentVisitorId)return;
       appendMessage(m);
     }
   });
-  realtimeChannel = channel;
+  realtimeChannel=channel;
   channel.subscribe();
 }
 
-async function loadMessages() {
-  let query = db.from("messages").select("*")
+async function loadMessages(){
+  let query=db.from("messages").select("*")
     .eq("room_id",currentRoom).order("created_at");
-  if (!isAdmin) query = query.eq("visitor_id",currentUser.id);
-  else if (currentVisitorId) query = query.eq("visitor_id",currentVisitorId);
-  const {data,error} = await query;
-  if (error) {
+  if(!isAdmin)query=query.eq("visitor_id",currentUser.id);
+  else if(currentVisitorId)query=query.eq("visitor_id",currentVisitorId);
+  const {data,error}=await query;
+  if(error){
     console.error(error);
     alert("메시지를 불러오지 못했어요: "+error.message);
     return;
   }
-  $("messages").innerHTML = "";
-  (data || []).forEach(appendMessage);
+  $("messages").innerHTML="";
+  (data||[]).forEach(appendMessage);
 }
 
-function appendMessage(m) {
-  if ($("messages").querySelector('[data-message="'+m.id+'"]')) return;
-  const mine = isAdmin ? m.sender_type === "admin" : m.sender_type === "visitor";
-  const el = document.createElement("div");
-  el.className = "msg"+(mine ? " mine" : "");
-  el.dataset.message = m.id;
-  const time = new Date(m.created_at).toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit"});
-  el.innerHTML = `<div class="msg-name">${esc(m.sender_name)}</div>
+function appendMessage(m){
+  if($("messages").querySelector('[data-message="'+m.id+'"]'))return;
+  const mine=isAdmin?m.sender_type==="admin":m.sender_type==="visitor";
+  const el=document.createElement("div");
+  el.className="msg"+(mine?" mine":"");
+  el.dataset.message=m.id;
+  const time=new Date(m.created_at).toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit"});
+  el.innerHTML=`<div class="msg-name">${esc(m.sender_name)}</div>
     <div class="bubble">${esc(m.content)}</div><div class="msg-time">${time}</div>`;
   $("messages").appendChild(el);
-  $("messages").scrollTop = $("messages").scrollHeight;
+  $("messages").scrollTop=$("messages").scrollHeight;
 }
 
-$("sendForm").addEventListener("submit",async e => {
+$("sendForm").addEventListener("submit",async e=>{
   e.preventDefault();
-  const content = $("sendInput").value.trim();
-  if (!content || !currentRoom) return;
-  const visitorId = isAdmin ? currentVisitorId : currentUser.id;
-  if (!visitorId) {
+  const content=$("sendInput").value.trim();
+  if(!content||!currentRoom)return;
+  const visitorId=isAdmin?currentVisitorId:currentUser.id;
+  if(!visitorId){
     alert("대화 상대를 먼저 선택해 주세요.");
     return;
   }
-  const senderName = isAdmin ? currentPartner :
-    (localStorage.getItem("chat_display_name") || "방문자");
-  const {error} = await db.from("messages").insert({
+  const senderName=isAdmin?currentPartner:
+    (localStorage.getItem("chat_display_name")||"방문자");
+  const {error}=await db.from("messages").insert({
     room_id:currentRoom,
     visitor_id:visitorId,
-    sender_type:isAdmin ? "admin" : "visitor",
+    sender_type:isAdmin?"admin":"visitor",
     sender_name:senderName,
     content
   });
-  if (error) {
+  if(error){
     alert("메시지 전송 실패: "+error.message);
     return;
   }
-  $("sendInput").value = "";
-  if (!isAdmin) {
+  $("sendInput").value="";
+  if(!isAdmin){
     await db.from("rooms").update({preview_text:content}).eq("id",currentRoom);
   }
 });
 
-$("backBtn").onclick = async () => {
-  $("chatView").style.display = "none";
-  $("homeView").style.display = "block";
-  if (realtimeChannel) await db.removeChannel(realtimeChannel);
-  currentRoom = null;
-  currentVisitorId = null;
+$("backBtn").onclick=async()=>{
+  $("chatView").style.display="none";
+  $("homeView").style.display="block";
+  if(realtimeChannel)await db.removeChannel(realtimeChannel);
+  currentRoom=null;
+  currentVisitorId=null;
   await loadRooms();
 };
 
-$("adminBack").onclick = () => {
-  $("adminView").style.display = "none";
-  $("homeView").style.display = "block";
+$("adminBack").onclick=()=>{
+  $("adminView").style.display="none";
+  $("homeView").style.display="block";
 };
 
-async function openAdmin() {
-  $("homeView").style.display = "none";
-  $("chatView").style.display = "none";
-  $("adminView").style.display = "block";
+async function openAdmin(){
+  $("homeView").style.display="none";
+  $("chatView").style.display="none";
+  $("adminView").style.display="flex";
 }
 
-$("loginBtn").onclick = async () => {
-  const email = $("adminEmail").value.trim();
-  const password = $("adminPassword").value;
-  const {data,error} = await db.auth.signInWithPassword({email,password});
-  if (error) {
+$("loginBtn").onclick=async()=>{
+  const email=$("adminEmail").value.trim();
+  const password=$("adminPassword").value;
+  const {data,error}=await db.auth.signInWithPassword({email,password});
+  if(error){
     alert("로그인 실패: "+error.message);
     return;
   }
-  currentUser = data.user;
-  const {data:row,error:checkError} = await db.from("admin_users")
+  currentUser=data.user;
+  const {data:row,error:checkError}=await db.from("admin_users")
     .select("user_id").eq("user_id",currentUser.id).maybeSingle();
-  if (checkError || !row) {
+  if(checkError||!row){
     alert("관리자로 등록된 계정이 아니에요.");
     await db.auth.signOut();
-    currentUser = null;
+    currentUser=null;
     await db.auth.signInAnonymously();
     return;
   }
-  isAdmin = true;
+  isAdmin=true;
   $("adminLogin").classList.add("hidden");
   $("adminTools").classList.remove("hidden");
   await loadRooms();
   await loadVisitorThreads();
 };
 
-async function loadVisitorThreads() {
-  const {data,error} = await db.from("messages")
+async function loadVisitorThreads(){
+  const {data,error}=await db.from("messages")
     .select("room_id,visitor_id,content,created_at,sender_name")
     .order("created_at",{ascending:false});
-  if (error) {
-    $("visitorThreads").textContent = "대화를 불러오지 못했어요: "+error.message;
+  if(error){
+    $("visitorThreads").textContent="대화를 불러오지 못했어요: "+error.message;
     return;
   }
-  const seen = new Set();
-  const threads = [];
-  for (const m of data || []) {
-    const key = m.room_id+"_"+m.visitor_id;
-    if (!seen.has(key)) {
+  const seen=new Set();
+  const threads=[];
+  for(const m of data||[]){
+    const key=m.room_id+"_"+m.visitor_id;
+    if(!seen.has(key)){
       seen.add(key);
       threads.push(m);
     }
   }
-  $("visitorThreads").innerHTML = threads.map(t => {
-    const room = roomsCache.find(r => r.id === t.room_id);
+  $("visitorThreads").innerHTML=threads.map(t=>{
+    const room=roomsCache.find(r=>r.id===t.room_id);
     return `<div class="thread">
-      <strong>${esc(room?.room_name || "채팅방")}</strong>
+      <strong>${esc(room?.room_name||"채팅방")}</strong>
       <div class="small">방문자 ID: ${esc(t.visitor_id)}</div>
       <div class="preview">${esc(t.content)}</div>
       <button class="action" data-thread-room="${t.room_id}" data-thread-visitor="${t.visitor_id}">대화 열기</button>
     </div>`;
-  }).join("") || "<p class='small'>아직 방문자 대화가 없어요.</p>";
+  }).join("")||"<p class='small'>아직 방문자 대화가 없어요.</p>";
 }
 
-$("visitorThreads").addEventListener("click",async e => {
-  const b = e.target.closest("[data-thread-room]");
-  if (!b) return;
-  const room = roomsCache.find(r => r.id === b.dataset.threadRoom);
-  if (!room) return;
-  currentVisitorId = b.dataset.threadVisitor;
+$("visitorThreads").addEventListener("click",async e=>{
+  const b=e.target.closest("[data-thread-room]");
+  if(!b)return;
+  const room=roomsCache.find(r=>r.id===b.dataset.threadRoom);
+  if(!room)return;
+  currentVisitorId=b.dataset.threadVisitor;
   await openChat(room,currentVisitorId);
 });
 
-function renderAdminRooms() {
-  $("adminRooms").innerHTML = roomsCache.map(r => `
+function renderAdminRooms(){
+  $("adminRooms").innerHTML=roomsCache.map(r=>`
     <div class="admin-room">
       <strong>${esc(r.room_name)}</strong>
-      <div class="small">${esc(r.partner_name)} · ${r.is_open ? "대화 가능" : "미리보기"}</div>
+      <div class="small">${esc(r.partner_name)} · ${r.is_open?"대화 가능":"미리보기"}</div>
       <button class="action" data-toggle="${r.id}" data-open="${!r.is_open}">
-        ${r.is_open ? "대화 닫기" : "대화 열기"}
+        ${r.is_open?"대화 닫기":"대화 열기"}
       </button>
     </div>`).join("");
 }
 
-$("adminRooms").addEventListener("click",async e => {
-  const b = e.target.closest("[data-toggle]");
-  if (!b) return;
-  const {error} = await db.from("rooms")
-    .update({is_open:b.dataset.open === "true"})
+$("adminRooms").addEventListener("click",async e=>{
+  const b=e.target.closest("[data-toggle]");
+  if(!b)return;
+  const {error}=await db.from("rooms")
+    .update({is_open:b.dataset.open==="true"})
     .eq("id",b.dataset.toggle);
-  if (error) alert(error.message);
+  if(error)alert(error.message);
   else await loadRooms();
 });
 
-$("addRoomBtn").onclick = async () => {
-  const room_name = $("newRoomName").value.trim();
-  const partner_name = $("newPartnerName").value.trim();
-  const avatar_url = $("newAvatar").value.trim();
-  if (!room_name || !partner_name) {
+$("addRoomBtn").onclick=async()=>{
+  const room_name=$("newRoomName").value.trim();
+  const partner_name=$("newPartnerName").value.trim();
+  const avatar_url=$("newAvatar").value.trim();
+  if(!room_name||!partner_name){
     alert("채팅방 이름과 상대방 이름을 입력해 주세요.");
     return;
   }
-  const {error} = await db.from("rooms").insert({
+  const {error}=await db.from("rooms").insert({
     room_name,partner_name,avatar_url,is_open:false,
     preview_text:"대화를 시작해 보세요.",
     sort_order:roomsCache.length
   });
-  if (error) alert("채팅방 생성 실패: "+error.message);
-  else {
-    $("newRoomName").value = "";
-    $("newPartnerName").value = "";
-    $("newAvatar").value = "";
+  if(error)alert("채팅방 생성 실패: "+error.message);
+  else{
+    $("newRoomName").value="";
+    $("newPartnerName").value="";
+    $("newAvatar").value="";
     await loadRooms();
   }
 };
 
-$("saveBanner").onclick = () => {
-  const url = $("bannerUrl").value.trim();
-  if (!url) return;
-  $("banner").innerHTML = `<img src="${esc(url)}" alt="배너">`;
+$("saveBanner").onclick=()=>{
+  const url=$("bannerUrl").value.trim();
+  if(!url)return;
+  $("banner").innerHTML=`<img src="${esc(url)}" alt="배너">`;
 };
 
-$("logoutBtn").onclick = async () => {
+$("logoutBtn").onclick=async()=>{
   await db.auth.signOut();
-  isAdmin = false;
-  currentUser = null;
-  currentVisitorId = null;
+  isAdmin=false;
+  currentUser=null;
+  currentVisitorId=null;
   $("adminTools").classList.add("hidden");
   $("adminLogin").classList.remove("hidden");
-  $("adminView").style.display = "none";
-  $("homeView").style.display = "block";
-  const {data,error} = await db.auth.signInAnonymously();
-  if (!error) currentUser = data.user;
+  $("adminView").style.display="none";
+  $("homeView").style.display="block";
+  const {data,error}=await db.auth.signInAnonymously();
+  if(!error)currentUser=data.user;
   await loadRooms();
 };
 
-const adminButton = document.createElement("button");
-adminButton.textContent = "관리자";
-adminButton.style.cssText = "position:fixed;right:12px;bottom:78px;z-index:3;background:#333;color:#aaa;border:0;border-radius:20px;padding:8px 12px;font-size:11px";
-adminButton.onclick = openAdmin;
+const adminButton=document.createElement("button");
+adminButton.textContent="관리자";
+adminButton.style.cssText="position:fixed;right:12px;bottom:12px;z-index:7;background:transparent;color:#aaa;border:0;padding:8px;font-size:10px";
+adminButton.onclick=openAdmin;
 document.body.appendChild(adminButton);
 
 start();
