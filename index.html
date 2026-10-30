@@ -202,7 +202,17 @@ async function openChat(room,visitorId=null){
   currentRoom=room.id;
   currentRoomName=room.room_name;
   currentPartner=room.partner_name;
-  if(isAdmin&&visitorId)currentVisitorId=visitorId;
+
+  if(isAdmin){
+    currentVisitorId=visitorId || currentVisitorId;
+    if(!currentVisitorId){
+      alert("방문자 대화를 먼저 선택해 주세요.");
+      return;
+    }
+  }else{
+    currentVisitorId=currentUser.id;
+  }
+
   $("chatTitle").textContent=room.partner_name||room.room_name;
   $("homeView").style.display="none";
   $("chatView").style.display="flex";
@@ -211,16 +221,13 @@ async function openChat(room,visitorId=null){
   await loadMessages();
 
   if(realtimeChannel)await db.removeChannel(realtimeChannel);
-  let channel=db.channel("chat-"+room.id+"-"+(currentVisitorId||"admin"));
+  const channel=db.channel("chat-"+room.id+"-"+currentVisitorId);
   channel.on("postgres_changes",{
     event:"INSERT",schema:"public",table:"messages",
     filter:"room_id=eq."+room.id
   },payload=>{
     const m=payload.new;
-    if(isAdmin||m.visitor_id===currentUser.id){
-      if(isAdmin&&currentVisitorId&&m.visitor_id!==currentVisitorId)return;
-      appendMessage(m);
-    }
+    if(m.visitor_id===currentVisitorId)appendMessage(m);
   });
   realtimeChannel=channel;
   channel.subscribe();
@@ -258,13 +265,16 @@ $("sendForm").addEventListener("submit",async e=>{
   e.preventDefault();
   const content=$("sendInput").value.trim();
   if(!content||!currentRoom)return;
-  const visitorId=isAdmin?currentVisitorId:currentUser.id;
+
+  const visitorId=isAdmin?currentVisitorId:currentUser?.id;
   if(!visitorId){
-    alert("대화 상대를 먼저 선택해 주세요.");
+    alert("방문자 대화를 먼저 선택해 주세요.");
     return;
   }
-  const senderName=isAdmin?currentPartner:
+
+  const senderName=isAdmin?(currentPartner||"관리자"):
     (localStorage.getItem("chat_display_name")||"방문자");
+
   const {error}=await db.from("messages").insert({
     room_id:currentRoom,
     visitor_id:visitorId,
@@ -272,6 +282,7 @@ $("sendForm").addEventListener("submit",async e=>{
     sender_name:senderName,
     content
   });
+
   if(error){
     alert("메시지 전송 실패: "+error.message);
     return;
@@ -358,10 +369,14 @@ async function loadVisitorThreads(){
 $("visitorThreads").addEventListener("click",async e=>{
   const b=e.target.closest("[data-thread-room]");
   if(!b)return;
-  const room=roomsCache.find(r=>r.id===b.dataset.threadRoom);
-  if(!room)return;
-  currentVisitorId=b.dataset.threadVisitor;
-  await openChat(room,currentVisitorId);
+  const room=roomsCache.find(r=>String(r.id)===b.dataset.threadRoom);
+  const visitorId=b.dataset.threadVisitor;
+  if(!room||!visitorId){
+    alert("방문자 정보를 찾을 수 없어요.");
+    return;
+  }
+  currentVisitorId=visitorId;
+  await openChat(room,visitorId);
 });
 
 function renderAdminRooms(){
