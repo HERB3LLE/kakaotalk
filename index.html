@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -49,6 +50,17 @@ h3{font-size:16px;margin:20px 0 10px}
 .small{color:#8e8e93;font-size:12px;line-height:1.5}
 .hidden{display:none!important}
 body>button{position:fixed!important;right:10px!important;bottom:10px!important;z-index:7!important;background:transparent!important;color:#a1a1a6!important;border:0!important;padding:5px 8px!important;font-size:10px!important}
+
+/* 프로필 수정창 */
+#profileModal{display:none;position:fixed;inset:0;background:#0006;z-index:50;align-items:center;justify-content:center;padding:20px}
+.profile-card{width:100%;max-width:360px;background:#fff;border-radius:18px;padding:20px}
+.profile-card h3{margin:0 0 18px}
+.profile-card label{display:block;font-size:13px;color:#666;margin:12px 0 4px}
+.profile-card input{width:100%;padding:12px;border:1px solid #d1d1d6;border-radius:9px;background:#f7f7f9;color:#111}
+.profile-actions{display:flex;gap:8px;margin-top:18px}
+.profile-actions button{flex:1}
+.profile-preview{width:76px;height:76px;border-radius:50%;background:#eee;overflow:hidden;margin:0 auto 15px;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:25px}
+.profile-preview img{width:100%;height:100%;object-fit:cover}
 </style>
 </head>
 <body>
@@ -97,17 +109,43 @@ body>button{position:fixed!important;right:10px!important;bottom:10px!important;
       <input id="newPartnerName" placeholder="상대방 이름">
       <input id="newAvatar" placeholder="프로필 이미지 주소 (선택)">
       <button class="action" id="addRoomBtn">채팅방 만들기</button>
+
       <h3>배너 이미지 변경</h3>
       <input id="bannerUrl" placeholder="배너 이미지 주소">
       <button class="action" id="saveBanner">배너 적용</button>
+
       <h3>채팅방 목록</h3>
       <div id="adminRooms"></div>
+
       <h3>방문자 대화</h3>
       <div id="visitorThreads"></div>
+
       <button class="action secondary" id="logoutBtn">로그아웃</button>
     </div>
   </div>
 </section>
+</div>
+
+<!-- 프로필 수정창 -->
+<div id="profileModal">
+  <div class="profile-card">
+    <h3>채팅방 프로필 수정</h3>
+    <div class="profile-preview" id="profilePreview">●</div>
+
+    <label>채팅방 이름</label>
+    <input id="editRoomName" placeholder="채팅방 이름">
+
+    <label>상대방 이름</label>
+    <input id="editPartnerName" placeholder="상대방 이름">
+
+    <label>프로필 사진 주소</label>
+    <input id="editAvatarUrl" placeholder="이미지 URL" inputmode="url">
+
+    <div class="profile-actions">
+      <button class="action secondary" id="cancelProfile">취소</button>
+      <button class="action" id="saveProfile">저장</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -123,6 +161,7 @@ let currentVisitorId=null;
 let isAdmin=false;
 let realtimeChannel=null;
 let roomsCache=[];
+let editingRoomId=null;
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({
@@ -313,6 +352,7 @@ async function openAdmin(){
   $("adminView").style.display="flex";
 }
 
+/* 관리자 로그인 */
 $("loginBtn").onclick=async()=>{
   const email=$("adminEmail").value.trim();
   const password=$("adminPassword").value;
@@ -379,6 +419,7 @@ $("visitorThreads").addEventListener("click",async e=>{
   await openChat(room,visitorId);
 });
 
+/* 관리자 채팅방 목록 */
 function renderAdminRooms(){
   $("adminRooms").innerHTML=roomsCache.map(r=>`
     <div class="admin-room">
@@ -387,19 +428,99 @@ function renderAdminRooms(){
       <button class="action" data-toggle="${r.id}" data-open="${!r.is_open}">
         ${r.is_open?"대화 닫기":"대화 열기"}
       </button>
+      <button class="action secondary" data-edit-room="${r.id}">프로필 수정</button>
     </div>`).join("");
 }
 
+/* 프로필 수정창 열기 */
+function openProfileEditor(room){
+  editingRoomId=room.id;
+  $("editRoomName").value=room.room_name||"";
+  $("editPartnerName").value=room.partner_name||"";
+  $("editAvatarUrl").value=room.avatar_url||"";
+  updateProfilePreview();
+  $("profileModal").style.display="flex";
+}
+
+function closeProfileEditor(){
+  $("profileModal").style.display="none";
+  editingRoomId=null;
+}
+
+function updateProfilePreview(){
+  const url=$("editAvatarUrl").value.trim();
+  $("profilePreview").innerHTML=url
+    ? `<img src="${esc(url)}" onerror="this.parentElement.textContent='이미지를 불러올 수 없어요'">`
+    : "●";
+}
+
+$("editAvatarUrl").addEventListener("input",updateProfilePreview);
+$("cancelProfile").onclick=closeProfileEditor;
+$("profileModal").addEventListener("click",e=>{
+  if(e.target===$("profileModal"))closeProfileEditor();
+});
+
+/* 프로필 저장 */
+$("saveProfile").onclick=async()=>{
+  if(!editingRoomId)return;
+
+  const room_name=$("editRoomName").value.trim();
+  const partner_name=$("editPartnerName").value.trim();
+  const avatar_url=$("editAvatarUrl").value.trim();
+
+  if(!room_name||!partner_name){
+    alert("채팅방 이름과 상대방 이름을 입력해 주세요.");
+    return;
+  }
+
+  const btn=$("saveProfile");
+  btn.disabled=true;
+  btn.textContent="저장 중...";
+
+  const {data,error}=await db.from("rooms")
+    .update({room_name,partner_name,avatar_url})
+    .eq("id",editingRoomId)
+    .select();
+
+  btn.disabled=false;
+  btn.textContent="저장";
+
+  if(error){
+    alert("프로필 수정 실패: "+error.message);
+    return;
+  }
+
+  if(!data||data.length===0){
+    alert("수정 권한이 없거나 해당 채팅방을 찾을 수 없어요. Supabase의 rooms UPDATE 정책을 확인해 주세요.");
+    return;
+  }
+
+  closeProfileEditor();
+  await loadRooms();
+  alert("채팅방 프로필을 수정했어요!");
+};
+
+/* 관리자 채팅방 버튼 */
 $("adminRooms").addEventListener("click",async e=>{
+  const edit=e.target.closest("[data-edit-room]");
+  if(edit){
+    const room=roomsCache.find(r=>String(r.id)===edit.dataset.editRoom);
+    if(room)openProfileEditor(room);
+    return;
+  }
+
   const b=e.target.closest("[data-toggle]");
   if(!b)return;
+
   const {error}=await db.from("rooms")
     .update({is_open:b.dataset.open==="true"})
     .eq("id",b.dataset.toggle);
+
   if(error)alert(error.message);
   else await loadRooms();
 });
 
+/* 채팅방 생성 */
 $("addRoomBtn").onclick=async()=>{
   const room_name=$("newRoomName").value.trim();
   const partner_name=$("newPartnerName").value.trim();
