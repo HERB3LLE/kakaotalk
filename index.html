@@ -120,6 +120,8 @@ h3{font-size:16px;margin:20px 0 10px}
         <option value="visitor">김 (오른쪽 파란색)</option>
       </select>
       <textarea id="sharedContent" placeholder="공통 대화 내용"></textarea>
+      <label class="small" for="sharedDateTime">날짜 및 시간</label>
+      <input id="sharedDateTime" type="datetime-local">
       <button class="action" id="addSharedBtn">공통 메시지 추가</button>
       <div id="sharedMessages"></div>
 
@@ -258,6 +260,13 @@ async function loadMessages(){
   renderMessages(data||[]);
 }
 
+function formatEnglishDate(value){
+  const d=new Date(value);
+  const date=d.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"});
+  const time=d.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"});
+  return `${date} at ${time}`;
+}
+
 function renderMessages(data){
   $("messages").innerHTML="";
   let previousDay="";
@@ -266,7 +275,7 @@ function renderMessages(data){
     if(day!==previousDay){
       const sep=document.createElement("div");
       sep.className="day-separator";
-      sep.textContent=new Date(m.created_at).toLocaleString("en-US",{month:"short",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit"});
+      sep.textContent=formatEnglishDate(m.created_at);
       $("messages").appendChild(sep);
       previousDay=day;
     }
@@ -351,6 +360,7 @@ $("loginBtn").onclick=async()=>{
   $("adminLogin").classList.add("hidden");
   $("adminTools").classList.remove("hidden");
   await loadRooms();
+  setDefaultSharedDateTime();
   await loadVisitorThreads();
   await loadSharedMessages();
 };
@@ -366,6 +376,12 @@ function renderSharedRoomOptions(){
 
 $("sharedRoomSelect").addEventListener("change",loadSharedMessages);
 
+function setDefaultSharedDateTime(){
+  const d=new Date();
+  d.setMinutes(d.getMinutes()-d.getTimezoneOffset());
+  $("sharedDateTime").value=d.toISOString().slice(0,16);
+}
+
 async function loadSharedMessages(){
   if(!isAdmin)return;
   const roomId=$("sharedRoomSelect").value;
@@ -380,6 +396,7 @@ async function loadSharedMessages(){
     <div class="shared-item">
       <strong>${m.sender_type==="visitor"?"김 · 오른쪽":"노 · 왼쪽"}</strong>
       <div class="content">${esc(m.content)}</div>
+      <div class="small">${formatEnglishDate(m.created_at)}</div>
       <button class="action secondary" data-shared-edit="${esc(m.id)}">수정</button>
       <button class="action danger" data-shared-delete="${esc(m.id)}">삭제</button>
     </div>
@@ -393,15 +410,15 @@ $("addSharedBtn").onclick=async()=>{
   if(!roomId){alert("채팅방을 선택해 주세요.");return}
   if(!content){alert("메시지 내용을 입력해 주세요.");return}
   const senderName=senderType==="visitor"?"김":"노";
+  const dateValue=$("sharedDateTime").value;
+  if(!dateValue){alert("날짜와 시간을 선택해 주세요.");return}
   const {error}=await db.from("messages").insert({
-    room_id:roomId,
-    visitor_id:null,
-    sender_type:senderType,
-    sender_name:senderName,
-    content
+    room_id:roomId,visitor_id:null,sender_type:senderType,sender_name:senderName,content,
+    created_at:new Date(dateValue).toISOString()
   });
   if(error){alert("공통 메시지 등록 실패: "+error.message);return}
   $("sharedContent").value="";
+  setDefaultSharedDateTime();
   await loadSharedMessages();
   alert("공통 메시지를 추가했어요!");
 };
@@ -417,7 +434,12 @@ $("sharedMessages").addEventListener("click",async e=>{
     const next=prompt("공통 메시지 수정",data.content);
     if(next===null)return;
     if(!next.trim()){alert("메시지 내용을 입력해 주세요.");return}
-    const {error:updateError}=await db.from("messages").update({content:next.trim()}).eq("id",id).is("visitor_id",null);
+    const dt=new Date(data.created_at);
+    const localDt=new Date(dt.getTime()-dt.getTimezoneOffset()*60000).toISOString().slice(0,16);
+    const nextDate=prompt("날짜와 시간 수정 (YYYY-MM-DDTHH:mm)",localDt);
+    if(nextDate===null)return;
+    if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(nextDate)||isNaN(new Date(nextDate).getTime())){alert("날짜 형식을 YYYY-MM-DDTHH:mm으로 입력해 주세요.");return}
+    const {error:updateError}=await db.from("messages").update({content:next.trim(),created_at:new Date(nextDate).toISOString()}).eq("id",id).is("visitor_id",null);
     if(updateError){alert("수정 실패: "+updateError.message);return}
     await loadSharedMessages();
     return;
