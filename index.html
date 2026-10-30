@@ -3,710 +3,444 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>Talk</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>채팅</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box}
-body{margin:0;background:#171717;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Arial",sans-serif}
+body{margin:0;background:#111;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif}
 button,input{font:inherit}
 button{cursor:pointer}
-.app{max-width:520px;min-height:100vh;margin:auto;background:#171717;position:relative;padding-bottom:75px}
-.header{height:58px;padding:0 19px;display:flex;align-items:center;justify-content:space-between}
-.header h1{font-size:23px;margin:0;font-weight:750}
-.header-actions{display:flex;gap:20px;font-size:22px}
-.icon-btn{border:0;background:none;color:white;font-size:22px;padding:4px}
-.ad{margin:5px 15px 17px;height:112px;border-radius:12px;overflow:hidden;background:#292929}
-.ad img{width:100%;height:100%;object-fit:cover}
-.ad-empty{height:100%;display:flex;align-items:center;justify-content:center;color:#888;font-size:13px}
-.section{padding:0 19px}
-.section-title{font-size:17px;font-weight:700;margin:15px 0}
-.search{width:100%;height:38px;border:0;border-radius:8px;background:#292929;color:white;padding:0 13px;outline:none;margin-bottom:13px}
-.room{height:77px;display:flex;align-items:center;padding:0 17px;gap:12px;position:relative}
-.room:active{background:#252525}
-.avatar{width:49px;height:49px;border-radius:18px;background:#444;display:flex;align-items:center;justify-content:center;font-size:21px;flex-shrink:0;overflow:hidden}
+#app{max-width:520px;min-height:100dvh;margin:auto;background:#171717;position:relative;padding-bottom:76px}
+header{height:65px;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;font-size:23px;font-weight:750}
+.header-icons{display:flex;gap:20px;font-size:21px}
+#banner{margin:5px 15px 17px;height:105px;border-radius:12px;background:#292929;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#aaa}
+#banner img{width:100%;height:100%;object-fit:cover}
+.search{margin:0 15px 12px;background:#292929;border-radius:9px;padding:11px 13px;color:#999}
+.search input{background:none;border:0;outline:0;color:white;width:90%}
+.room{display:flex;align-items:center;padding:12px 17px;gap:12px;min-height:78px;border-bottom:1px solid #252525}
+.avatar{width:49px;height:49px;border-radius:18px;background:#343434;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;font-size:22px}
 .avatar img{width:100%;height:100%;object-fit:cover}
 .room-info{min-width:0;flex:1}
-.room-top{display:flex;justify-content:space-between;gap:8px;align-items:center}
-.room-name{font-size:15px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.room-time{font-size:11px;color:#888;flex-shrink:0}
-.room-preview{font-size:12px;color:#999;margin-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.unread{background:#f04c45;color:white;font-size:10px;border-radius:12px;padding:3px 6px;margin-left:5px}
-.locked{opacity:.58}
-.locked .room-preview{color:#777}
-.bottom{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:520px;height:67px;background:#202020;border-top:1px solid #333;display:flex;justify-content:space-around;align-items:center;z-index:5}
-.tab{background:none;border:0;color:#888;display:flex;flex-direction:column;align-items:center;gap:5px;font-size:10px}
-.tab span{font-size:21px}
-.tab.active{color:white}
-.screen{display:none;position:absolute;inset:0;background:#171717;z-index:10;min-height:100vh;padding-bottom:75px}
-.screen.show{display:block}
-.chat-header{height:58px;display:flex;align-items:center;padding:0 14px;border-bottom:1px solid #303030;gap:15px}
-.chat-header button{background:none;border:0;color:white;font-size:23px}
-.chat-title{font-size:17px;font-weight:700;flex:1}
-.chat-body{height:calc(100vh - 125px);overflow-y:auto;padding:18px 14px 25px}
-.day{text-align:center;color:#888;font-size:11px;margin:5px 0 22px}
-.msg{display:flex;margin:13px 0;gap:7px;align-items:flex-start}
-.msg.mine{justify-content:flex-end}
-.msg-avatar{width:34px;height:34px;border-radius:13px;background:#444;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
-.msg-content{max-width:75%}
-.msg-name{font-size:11px;color:#aaa;margin:0 0 5px 2px}
-.bubble{background:#333;padding:10px 12px;border-radius:4px 13px 13px 13px;font-size:14px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
-.mine .bubble{background:#fee500;color:#222;border-radius:13px 4px 13px 13px}
-.msg-time{font-size:9px;color:#777;margin-top:4px}
-.mine .msg-time{text-align:right}
-.composer{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:520px;display:flex;align-items:center;gap:8px;padding:10px;background:#222;border-top:1px solid #333;z-index:12}
-.composer input{flex:1;min-width:0;background:#333;border:0;border-radius:20px;padding:12px 15px;color:white;outline:none}
-.send{background:#fee500;color:#222;border:0;border-radius:50%;width:40px;height:40px;font-size:18px}
-.panel{padding:18px}
-.panel h2{font-size:20px}
-.field{margin:13px 0}
-.field label{display:block;font-size:12px;color:#aaa;margin-bottom:7px}
-.field input{width:100%;padding:12px;border:1px solid #444;border-radius:8px;background:#292929;color:white;outline:none}
-.primary{width:100%;padding:13px;background:#fee500;color:#222;border:0;border-radius:8px;font-weight:700;margin-top:10px}
-.secondary{width:100%;padding:12px;background:#333;color:white;border:0;border-radius:8px;margin-top:8px}
-.small{font-size:12px;color:#999;line-height:1.6}
-.admin-room{padding:12px;background:#292929;border-radius:10px;margin:10px 0}
-.admin-room button{margin-top:8px}
+.room-name{font-weight:650;font-size:16px;margin-bottom:6px}
+.preview{font-size:13px;color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.time{font-size:11px;color:#777}
+nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(100%,520px);height:67px;background:#202020;border-top:1px solid #303030;display:flex;justify-content:space-around;align-items:center;z-index:5}
+nav button{background:none;border:0;color:#888;font-size:11px;display:flex;flex-direction:column;gap:4px;align-items:center}
+nav button span{font-size:22px}
+nav button.active{color:#fff}
+#chatView,#adminView{display:none;position:absolute;inset:0;background:#171717;z-index:4;min-height:100dvh;padding-bottom:0}
+.chat-head{height:62px;display:flex;align-items:center;padding:0 16px;border-bottom:1px solid #303030;gap:18px}
+.chat-head button{background:none;border:0;color:white;font-size:24px}
+.chat-head strong{font-size:17px}
+#messages{height:calc(100dvh - 132px);overflow-y:auto;padding:16px}
+.msg{margin:12px 0;display:flex;flex-direction:column;align-items:flex-start}
+.msg.mine{align-items:flex-end}
+.msg-name{font-size:11px;color:#aaa;margin-bottom:5px}
+.bubble{max-width:78%;padding:10px 13px;border-radius:13px;background:#303030;line-height:1.45;overflow-wrap:anywhere}
+.mine .bubble{background:#fee500;color:#222}
+.msg-time{font-size:10px;color:#777;margin-top:4px}
+#sendForm{height:68px;display:flex;gap:8px;padding:10px;background:#252525}
+#sendInput{flex:1;min-width:0;border:0;border-radius:20px;padding:0 15px;background:#393939;color:white;outline:0}
+#sendForm button{border:0;border-radius:20px;background:#fee500;color:#222;padding:0 18px;font-weight:bold}
+.panel{padding:18px;overflow-y:auto;height:calc(100dvh - 62px)}
+.panel input{width:100%;padding:12px;margin:6px 0 12px;border:1px solid #444;border-radius:8px;background:#292929;color:white}
+.action{padding:11px 14px;border:0;border-radius:8px;background:#fee500;color:#222;font-weight:650;margin:4px 4px 4px 0}
+.secondary{background:#383838;color:white}
+.admin-room,.thread{padding:13px;border-bottom:1px solid #333}
+.admin-room button,.thread button{margin-top:8px}
+h3{font-size:16px;margin:20px 0 10px}
+.small{color:#999;font-size:12px;line-height:1.5}
 .hidden{display:none!important}
-.notice{padding:12px;background:#292929;border-radius:8px;color:#ccc;font-size:12px;line-height:1.6;margin:12px 0}
 </style>
 </head>
 <body>
-<div class="app">
-
-<header class="header">
-  <h1>채팅</h1>
-  <div class="header-actions">
-    <button class="icon-btn" onclick="showSearch()">⌕</button>
-    <button class="icon-btn" onclick="openAdmin()">⚙</button>
-  </div>
+<div id="app">
+<header>
+  <span id="pageTitle">채팅</span>
+  <div class="header-icons"><span>⌕</span><span>⚙</span></div>
 </header>
 
-<div class="ad" id="ad">
-  <img id="banner" src="banner.jpg" onerror="this.style.display='none';document.getElementById('adEmpty').style.display='flex'">
-  <div class="ad-empty" id="adEmpty" style="display:none">광고 이미지 영역</div>
+<div id="homeView">
+  <div id="banner">배너 이미지</div>
+  <div class="search">⌕ <input id="searchInput" placeholder="채팅방 검색"></div>
+  <div id="roomList"></div>
 </div>
 
-<div class="section">
-  <input class="search" id="search" placeholder="🔍  채팅방 검색" oninput="renderRooms()">
-  <div class="section-title">채팅 <span id="roomCount" style="color:#888;font-size:12px"></span></div>
-</div>
-
-<div id="roomList"></div>
-
-<nav class="bottom">
-  <button class="tab"><span>♙</span>친구</button>
-  <button class="tab active"><span>▤</span>채팅</button>
-  <button class="tab"><span>◉</span>오픈채팅</button>
-  <button class="tab"><span>◷</span>쇼핑</button>
-  <button class="tab"><span>•••</span>더보기</button>
+<nav>
+  <button class="active"><span>👤</span>친구</button>
+  <button class="active"><span>▣</span>채팅</button>
+  <button><span>◉</span>오픈채팅</button>
+  <button><span>⋯</span>더보기</button>
 </nav>
 
-<!-- 채팅 화면 -->
-<div class="screen" id="chatScreen">
-  <div class="chat-header">
-    <button onclick="closeChat()">‹</button>
-    <div class="chat-title" id="chatTitle">채팅방</div>
-    <button onclick="showChatInfo()">☰</button>
+<section id="chatView">
+  <div class="chat-head">
+    <button id="backBtn">‹</button>
+    <strong id="chatTitle">채팅</strong>
   </div>
-  <div class="chat-body" id="chatBody">
-    <div class="day">대화가 시작되었습니다.</div>
-  </div>
-  <div class="composer" id="composer">
-    <input id="messageInput" placeholder="메시지를 입력하세요" onkeydown="if(event.key==='Enter')sendMessage()">
-    <button class="send" onclick="sendMessage()">➤</button>
-  </div>
-</div>
+  <div id="messages"></div>
+  <form id="sendForm">
+    <input id="sendInput" placeholder="메시지를 입력하세요" autocomplete="off">
+    <button>전송</button>
+  </form>
+</section>
 
-<!-- 관리자 화면 -->
-<div class="screen" id="adminScreen">
-  <div class="chat-header">
-    <button onclick="closeAdmin()">‹</button>
-    <div class="chat-title">관리자 설정</div>
+<section id="adminView">
+  <div class="chat-head">
+    <button id="adminBack">‹</button>
+    <strong>관리자</strong>
   </div>
-  <div class="panel">
-    <div id="loginArea">
-      <h2>관리자 로그인</h2>
-      <div class="field"><label>이메일</label><input id="adminEmail" type="email" placeholder="이메일"></div>
-      <div class="field"><label>비밀번호</label><input id="adminPassword" type="password" placeholder="비밀번호"></div>
-      <button class="primary" onclick="adminLogin()">로그인</button>
-      <button class="secondary" onclick="adminSignup()">관리자 계정 만들기</button>
-      <div class="notice">
-        처음 계정을 만들면 관리자 등록이 추가로 필요해요.
-        계정 생성 후 표시되는 사용자 ID를 복사해 두세요.
-      </div>
-      <div id="signupResult" class="small"></div>
+  <div class="panel" id="adminPanel">
+    <div id="adminLogin">
+      <h3>관리자 로그인</h3>
+      <input id="adminEmail" type="email" placeholder="관리자 이메일">
+      <input id="adminPassword" type="password" placeholder="비밀번호">
+      <button class="action" id="loginBtn">로그인</button>
+      <p class="small">관리자 계정은 Supabase에서 만든 계정을 사용해.</p>
     </div>
-
-    <div id="adminArea" class="hidden">
-      <h2>채팅방 관리</h2>
-      <div class="small">실제 대화방은 최대 3개까지 열 수 있어요.</div>
-
-      <div class="field"><label>채팅방 이름</label><input id="newRoomName" placeholder="예: 일상 대화"></div>
-      <div class="field"><label>상대방 이름</label><input id="newPartnerName" placeholder="예: 민지"></div>
-      <div class="field"><label>미리보기 문구</label><input id="newPreview" placeholder="예: 안녕하세요!"></div>
-      <div class="field"><label>프로필 이미지 URL (선택)</label><input id="newAvatar" placeholder="https://..."></div>
-      <button class="primary" onclick="addRoom()">채팅방 추가</button>
-
-      <div class="field" style="margin-top:25px">
-        <label>상단 광고 이미지 주소</label>
-        <input id="bannerUrl" placeholder="https://...">
-        <button class="secondary" onclick="changeBanner()">광고 이미지 변경</button>
-      </div>
-
-      <h2 style="margin-top:28px">등록된 채팅방</h2>
-      <div id="adminRoomList"></div>
-      <button class="secondary" onclick="adminLogout()">로그아웃</button>
+    <div id="adminTools" class="hidden">
+      <h3>채팅방 관리</h3>
+      <input id="newRoomName" placeholder="채팅방 이름">
+      <input id="newPartnerName" placeholder="상대방 이름">
+      <input id="newAvatar" placeholder="프로필 이미지 주소 (선택)">
+      <button class="action" id="addRoomBtn">채팅방 만들기</button>
+      <h3>배너 이미지 변경</h3>
+      <input id="bannerUrl" placeholder="배너 이미지 주소">
+      <button class="action" id="saveBanner">배너 적용</button>
+      <h3>채팅방 목록</h3>
+      <div id="adminRooms"></div>
+      <h3>방문자 대화</h3>
+      <div id="visitorThreads"></div>
+      <button class="action secondary" id="logoutBtn">로그아웃</button>
     </div>
   </div>
-</div>
-
+</section>
 </div>
 
 <script>
-// ======================================
-// Supabase 연결 정보
-// ======================================
-
 const SUPABASE_URL = "https://ieblvlcqngmmiwpvrzoq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_XFHlSKeuFq_OuXKrSzRU0A_uOA9c8VT";
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-// ======================================
-// 기본 설정
-// ======================================
-
-// 상단 광고 이미지 기본 주소.
-// GitHub 저장소에 banner.jpg를 올리면 자동으로 표시됩니다.
-const DEFAULT_BANNER = "banner.jpg";
-
-let rooms = [];
-let activeRoom = null;
 let currentUser = null;
+let currentRoom = null;
+let currentRoomName = "";
+let currentPartner = "";
+let currentVisitorId = null;
 let isAdmin = false;
-let messageChannel = null;
-let allMessages = [];
+let realtimeChannel = null;
+let roomsCache = [];
 
-document.getElementById("banner").src = DEFAULT_BANNER;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({
+  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+}[c]));
 
-// ======================================
-// 채팅방 불러오기
-// ======================================
+async function start() {
+  const {data:{session}} = await db.auth.getSession();
+  if (session) {
+    currentUser = session.user;
+  } else {
+    const {data,error} = await db.auth.signInAnonymously();
+    if (error) {
+      alert("익명 인증에 실패했어요. Supabase의 Anonymous Sign-ins 설정을 확인해 주세요.\n"+error.message);
+      return;
+    }
+    currentUser = data.user;
+  }
+  await loadRooms();
+}
 
-async function loadRooms(){
-  const {data,error} = await db
-    .from("rooms")
-    .select("*")
-    .order("sort_order",{ascending:true})
-    .order("created_at",{ascending:true});
-
-  if(error){
-    alert("채팅방을 불러오지 못했어요: "+error.message);
+async function loadRooms() {
+  const {data,error} = await db.from("rooms")
+    .select("*").order("sort_order").order("created_at");
+  if (error) {
+    $("roomList").textContent = "채팅방을 불러오지 못했어요.";
+    console.error(error);
     return;
   }
-
-  rooms = data || [];
+  roomsCache = data || [];
   renderRooms();
-  if(isAdmin) renderAdminRooms();
+  if (isAdmin) renderAdminRooms();
 }
 
-async function renderRooms(){
-  const list = document.getElementById("roomList");
-  const keyword = document.getElementById("search").value.toLowerCase();
-
-  const filtered = rooms.filter(r =>
-    (r.room_name + r.partner_name + (r.preview_text || ""))
-    .toLowerCase().includes(keyword)
+function renderRooms() {
+  const q = $("searchInput").value.toLowerCase();
+  const visible = roomsCache.filter(r =>
+    (r.room_name || "").toLowerCase().includes(q) ||
+    (r.partner_name || "").toLowerCase().includes(q)
   );
-
-  document.getElementById("roomCount").textContent = rooms.length ? rooms.length : "";
-
-  list.innerHTML = "";
-
-  for(const room of filtered){
-    const latest = allMessages
-      .filter(m => m.room_id === room.id)
-      .slice(-1)[0];
-
-    const preview = latest
-      ? (latest.sender_name + ": " + latest.content)
-      : (room.preview_text || "대화 내용이 없습니다.");
-
-    const div = document.createElement("div");
-    div.className = "room " + (!room.is_open ? "locked" : "");
-
-    const avatar = document.createElement("div");
-    avatar.className = "avatar";
-
-    if(room.avatar_url){
-      const img = document.createElement("img");
-      img.src = room.avatar_url;
-      avatar.appendChild(img);
-    }else{
-      avatar.textContent = "●";
-    }
-
-    const info = document.createElement("div");
-    info.className = "room-info";
-
-    const top = document.createElement("div");
-    top.className = "room-top";
-
-    const name = document.createElement("div");
-    name.className = "room-name";
-    name.textContent = room.room_name;
-
-    const time = document.createElement("div");
-    time.className = "room-time";
-    time.textContent = latest ? formatTime(latest.created_at) : "";
-
-    top.append(name,time);
-
-    const bottom = document.createElement("div");
-    bottom.className = "room-preview";
-    bottom.textContent = preview;
-
-    info.append(top,bottom);
-    div.append(avatar,info);
-
-    if(!room.is_open){
-      const lock = document.createElement("span");
-      lock.textContent = "🔒";
-      lock.style.fontSize = "13px";
-      div.appendChild(lock);
-    }
-
-    div.onclick = () => {
-      if(!room.is_open){
-        alert("아직 열리지 않은 채팅방이에요.");
-        return;
-      }
-      openChat(room);
-    };
-
-    list.appendChild(div);
-  }
+  $("roomList").innerHTML = visible.map(r => `
+    <div class="room" data-room="${r.id}" style="opacity:${r.is_open ? 1 : .8}">
+      <div class="avatar">${r.avatar_url ? `<img src="${esc(r.avatar_url)}">` : "●"}</div>
+      <div class="room-info">
+        <div class="room-name">${esc(r.room_name)}</div>
+        <div class="preview">${esc(r.preview_text || "대화를 시작해 보세요.")}</div>
+      </div>
+      <div class="time">${r.is_open ? "" : "미리보기"}</div>
+    </div>`).join("");
 }
 
-// ======================================
-// 채팅방 열기
-// ======================================
+$("searchInput").addEventListener("input",renderRooms);
 
-async function openChat(room){
-  activeRoom = room;
-
-  if(!currentUser){
-    const name = prompt("채팅에서 사용할 이름을 입력해 주세요.");
-    if(!name || !name.trim()) return;
-    currentUser = name.trim();
-    localStorage.setItem("talk_visitor_name",currentUser);
+$("roomList").addEventListener("click", async e => {
+  const item = e.target.closest("[data-room]");
+  if (!item) return;
+  const room = roomsCache.find(r => r.id === item.dataset.room);
+  if (!room) return;
+  if (!room.is_open) {
+    alert("아직 대화할 수 없는 채팅방이에요.");
+    return;
   }
+  if (!isAdmin) {
+    let name = localStorage.getItem("chat_display_name");
+    if (!name) {
+      name = prompt("채팅에서 사용할 이름을 입력해 주세요.");
+      if (!name || !name.trim()) return;
+      name = name.trim().slice(0,30);
+      localStorage.setItem("chat_display_name",name);
+    }
+    currentVisitorId = currentUser.id;
+  }
+  await openChat(room);
+});
 
-  document.getElementById("chatTitle").textContent = room.room_name;
-  document.getElementById("chatScreen").classList.add("show");
-
+async function openChat(room, visitorId=null) {
+  currentRoom = room.id;
+  currentRoomName = room.room_name;
+  currentPartner = room.partner_name;
+  if (isAdmin && visitorId) currentVisitorId = visitorId;
+  $("chatTitle").textContent = room.room_name;
+  $("homeView").style.display = "none";
+  $("chatView").style.display = "block";
+  $("adminView").style.display = "none";
+  $("messages").innerHTML = "";
   await loadMessages();
-
-  if(messageChannel){
-    await db.removeChannel(messageChannel);
-  }
-
-  messageChannel = db
-    .channel("room-" + room.id)
-    .on("postgres_changes",{
-      event:"INSERT",
-      schema:"public",
-      table:"messages",
-      filter:"room_id=eq."+room.id
-    },payload => {
-      if(activeRoom && activeRoom.id === room.id){
-        addMessageToScreen(payload.new);
-        allMessages.push(payload.new);
-        renderRooms();
-      }
-    })
-    .subscribe();
+  if (realtimeChannel) await db.removeChannel(realtimeChannel);
+  let channel = db.channel("chat-"+room.id+"-"+(currentVisitorId || "admin"));
+  channel.on("postgres_changes",{
+    event:"INSERT",schema:"public",table:"messages",
+    filter:"room_id=eq."+room.id
+  }, payload => {
+    const m = payload.new;
+    if (isAdmin || m.visitor_id === currentUser.id) {
+      if (isAdmin && currentVisitorId && m.visitor_id !== currentVisitorId) return;
+      appendMessage(m);
+    }
+  });
+  realtimeChannel = channel;
+  channel.subscribe();
 }
 
-async function loadMessages(){
-  const {data,error} = await db
-    .from("messages")
-    .select("*")
-    .eq("room_id",activeRoom.id)
-    .order("created_at",{ascending:true});
-
-  if(error){
+async function loadMessages() {
+  let query = db.from("messages").select("*")
+    .eq("room_id",currentRoom).order("created_at");
+  if (!isAdmin) query = query.eq("visitor_id",currentUser.id);
+  else if (currentVisitorId) query = query.eq("visitor_id",currentVisitorId);
+  const {data,error} = await query;
+  if (error) {
+    console.error(error);
     alert("메시지를 불러오지 못했어요: "+error.message);
     return;
   }
-
-  allMessages = data || [];
-
-  const body = document.getElementById("chatBody");
-  body.innerHTML = '<div class="day">대화 내용</div>';
-
-  allMessages.forEach(addMessageToScreen);
-  body.scrollTop = body.scrollHeight;
+  $("messages").innerHTML = "";
+  (data || []).forEach(appendMessage);
 }
 
-// ======================================
-// 메시지 표시
-// ======================================
+function appendMessage(m) {
+  if ($("messages").querySelector('[data-message="'+m.id+'"]')) return;
+  const mine = isAdmin ? m.sender_type === "admin" : m.sender_type === "visitor";
+  const el = document.createElement("div");
+  el.className = "msg"+(mine ? " mine" : "");
+  el.dataset.message = m.id;
+  const time = new Date(m.created_at).toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit"});
+  el.innerHTML = `<div class="msg-name">${esc(m.sender_name)}</div>
+    <div class="bubble">${esc(m.content)}</div><div class="msg-time">${time}</div>`;
+  $("messages").appendChild(el);
+  $("messages").scrollTop = $("messages").scrollHeight;
+}
 
-function addMessageToScreen(message){
-  const body = document.getElementById("chatBody");
-  const mine = isAdmin
-    ? message.sender_type === "admin"
-    : message.sender_type === "visitor" && message.sender_name === currentUser;
-
-  const row = document.createElement("div");
-  row.className = "msg " + (mine ? "mine" : "");
-
-  const avatar = document.createElement("div");
-  avatar.className = "msg-avatar";
-  avatar.textContent = mine ? "●" : "●";
-
-  const content = document.createElement("div");
-  content.className = "msg-content";
-
-  const name = document.createElement("div");
-  name.className = "msg-name";
-  name.textContent = message.sender_name;
-
-  const bubble = document.createElement("div");
-  bubble.className = "bubble";
-  bubble.textContent = message.content;
-
-  const time = document.createElement("div");
-  time.className = "msg-time";
-  time.textContent = formatTime(message.created_at);
-
-  content.append(name,bubble,time);
-
-  if(mine){
-    row.append(content);
-  }else{
-    row.append(avatar,content);
+$("sendForm").addEventListener("submit",async e => {
+  e.preventDefault();
+  const content = $("sendInput").value.trim();
+  if (!content || !currentRoom) return;
+  const visitorId = isAdmin ? currentVisitorId : currentUser.id;
+  if (!visitorId) {
+    alert("대화 상대를 먼저 선택해 주세요.");
+    return;
   }
-
-  body.appendChild(row);
-  body.scrollTop = body.scrollHeight;
-}
-
-// ======================================
-// 메시지 보내기
-// ======================================
-
-async function sendMessage(){
-  if(!activeRoom) return;
-
-  const input = document.getElementById("messageInput");
-  const content = input.value.trim();
-  if(!content) return;
-
-  const senderType = isAdmin ? "admin" : "visitor";
-  const senderName = isAdmin ? activeRoom.partner_name : currentUser;
-
+  const senderName = isAdmin ? currentPartner :
+    (localStorage.getItem("chat_display_name") || "방문자");
   const {error} = await db.from("messages").insert({
-    room_id:activeRoom.id,
-    sender_type:senderType,
+    room_id:currentRoom,
+    visitor_id:visitorId,
+    sender_type:isAdmin ? "admin" : "visitor",
     sender_name:senderName,
-    content:content
+    content
   });
-
-  if(error){
+  if (error) {
     alert("메시지 전송 실패: "+error.message);
     return;
   }
-
-  input.value = "";
-}
-
-// ======================================
-// 관리자 기능
-// ======================================
-
-function openAdmin(){
-  document.getElementById("adminScreen").classList.add("show");
-  checkAdmin();
-}
-
-function closeAdmin(){
-  document.getElementById("adminScreen").classList.remove("show");
-}
-
-async function adminSignup(){
-  const email = document.getElementById("adminEmail").value.trim();
-  const password = document.getElementById("adminPassword").value;
-
-  if(!email || password.length < 6){
-    alert("이메일과 6자 이상의 비밀번호를 입력해 주세요.");
-    return;
+  $("sendInput").value = "";
+  if (!isAdmin) {
+    await db.from("rooms").update({preview_text:content}).eq("id",currentRoom);
   }
+});
 
-  const {data,error} = await db.auth.signUp({email,password});
+$("backBtn").onclick = async () => {
+  $("chatView").style.display = "none";
+  $("homeView").style.display = "block";
+  if (realtimeChannel) await db.removeChannel(realtimeChannel);
+  currentRoom = null;
+  currentVisitorId = null;
+  await loadRooms();
+};
 
-  if(error){
-    alert(error.message);
-    return;
-  }
+$("adminBack").onclick = () => {
+  $("adminView").style.display = "none";
+  $("homeView").style.display = "block";
+};
 
-  const userId = data.user?.id;
-
-  document.getElementById("signupResult").textContent =
-    "계정 생성 요청 완료. 사용자 ID: " + (userId || "이메일 확인 후 로그인해 주세요.");
-
-  if(userId){
-    alert("계정이 생성됐어요. 사용자 ID를 복사해 두세요. 관리자 등록은 별도 SQL 단계가 필요해요.");
-  }
+async function openAdmin() {
+  $("homeView").style.display = "none";
+  $("chatView").style.display = "none";
+  $("adminView").style.display = "block";
 }
 
-async function adminLogin(){
-  const email = document.getElementById("adminEmail").value.trim();
-  const password = document.getElementById("adminPassword").value;
-
+$("loginBtn").onclick = async () => {
+  const email = $("adminEmail").value.trim();
+  const password = $("adminPassword").value;
   const {data,error} = await db.auth.signInWithPassword({email,password});
-
-  if(error){
+  if (error) {
     alert("로그인 실패: "+error.message);
     return;
   }
-
-  await checkAdmin();
-}
-
-async function checkAdmin(){
-  const {data:{user}} = await db.auth.getUser();
-  if(!user){
-    currentUser = localStorage.getItem("talk_visitor_name") || null;
-    isAdmin = false;
-    document.getElementById("loginArea").classList.remove("hidden");
-    document.getElementById("adminArea").classList.add("hidden");
+  currentUser = data.user;
+  const {data:row,error:checkError} = await db.from("admin_users")
+    .select("user_id").eq("user_id",currentUser.id).maybeSingle();
+  if (checkError || !row) {
+    alert("관리자로 등록된 계정이 아니에요.");
+    await db.auth.signOut();
+    currentUser = null;
+    await db.auth.signInAnonymously();
     return;
   }
-
-  const {data,error} = await db
-    .from("admin_users")
-    .select("user_id")
-    .eq("user_id",user.id)
-    .maybeSingle();
-
-  if(error || !data){
-    isAdmin = false;
-    alert("로그인은 됐지만 아직 관리자 권한이 등록되지 않았어요. 사용자 ID를 관리자 목록에 추가해야 해요.");
-    document.getElementById("loginArea").classList.remove("hidden");
-    document.getElementById("adminArea").classList.add("hidden");
-    return;
-  }
-
-  currentUser = user.email;
   isAdmin = true;
-
-  document.getElementById("loginArea").classList.add("hidden");
-  document.getElementById("adminArea").classList.remove("hidden");
-
+  $("adminLogin").classList.add("hidden");
+  $("adminTools").classList.remove("hidden");
   await loadRooms();
+  await loadVisitorThreads();
+};
+
+async function loadVisitorThreads() {
+  const {data,error} = await db.from("messages")
+    .select("room_id,visitor_id,content,created_at,sender_name")
+    .order("created_at",{ascending:false});
+  if (error) {
+    $("visitorThreads").textContent = "대화를 불러오지 못했어요: "+error.message;
+    return;
+  }
+  const seen = new Set();
+  const threads = [];
+  for (const m of data || []) {
+    const key = m.room_id+"_"+m.visitor_id;
+    if (!seen.has(key)) {
+      seen.add(key);
+      threads.push(m);
+    }
+  }
+  $("visitorThreads").innerHTML = threads.map(t => {
+    const room = roomsCache.find(r => r.id === t.room_id);
+    return `<div class="thread">
+      <strong>${esc(room?.room_name || "채팅방")}</strong>
+      <div class="small">방문자 ID: ${esc(t.visitor_id)}</div>
+      <div class="preview">${esc(t.content)}</div>
+      <button class="action" data-thread-room="${t.room_id}" data-thread-visitor="${t.visitor_id}">대화 열기</button>
+    </div>`;
+  }).join("") || "<p class='small'>아직 방문자 대화가 없어요.</p>";
 }
 
-async function adminLogout(){
-  await db.auth.signOut();
-  isAdmin = false;
-  currentUser = localStorage.getItem("talk_visitor_name") || null;
-  document.getElementById("loginArea").classList.remove("hidden");
-  document.getElementById("adminArea").classList.add("hidden");
-  alert("로그아웃했어요.");
+$("visitorThreads").addEventListener("click",async e => {
+  const b = e.target.closest("[data-thread-room]");
+  if (!b) return;
+  const room = roomsCache.find(r => r.id === b.dataset.threadRoom);
+  if (!room) return;
+  currentVisitorId = b.dataset.threadVisitor;
+  await openChat(room,currentVisitorId);
+});
+
+function renderAdminRooms() {
+  $("adminRooms").innerHTML = roomsCache.map(r => `
+    <div class="admin-room">
+      <strong>${esc(r.room_name)}</strong>
+      <div class="small">${esc(r.partner_name)} · ${r.is_open ? "대화 가능" : "미리보기"}</div>
+      <button class="action" data-toggle="${r.id}" data-open="${!r.is_open}">
+        ${r.is_open ? "대화 닫기" : "대화 열기"}
+      </button>
+    </div>`).join("");
 }
 
-// ======================================
-// 채팅방 추가 / 열기 / 닫기
-// ======================================
+$("adminRooms").addEventListener("click",async e => {
+  const b = e.target.closest("[data-toggle]");
+  if (!b) return;
+  const {error} = await db.from("rooms")
+    .update({is_open:b.dataset.open === "true"})
+    .eq("id",b.dataset.toggle);
+  if (error) alert(error.message);
+  else await loadRooms();
+});
 
-async function addRoom(){
-  if(!isAdmin) return alert("관리자 로그인이 필요해요.");
-
-  const room_name = document.getElementById("newRoomName").value.trim();
-  const partner_name = document.getElementById("newPartnerName").value.trim();
-  const preview_text = document.getElementById("newPreview").value.trim();
-  const avatar_url = document.getElementById("newAvatar").value.trim();
-
-  if(!room_name || !partner_name){
+$("addRoomBtn").onclick = async () => {
+  const room_name = $("newRoomName").value.trim();
+  const partner_name = $("newPartnerName").value.trim();
+  const avatar_url = $("newAvatar").value.trim();
+  if (!room_name || !partner_name) {
     alert("채팅방 이름과 상대방 이름을 입력해 주세요.");
     return;
   }
-
   const {error} = await db.from("rooms").insert({
-    room_name,
-    partner_name,
-    preview_text,
-    avatar_url,
-    is_open:false,
-    sort_order:rooms.length
+    room_name,partner_name,avatar_url,is_open:false,
+    preview_text:"대화를 시작해 보세요.",
+    sort_order:roomsCache.length
   });
-
-  if(error){
-    alert(error.message);
-    return;
+  if (error) alert("채팅방 생성 실패: "+error.message);
+  else {
+    $("newRoomName").value = "";
+    $("newPartnerName").value = "";
+    $("newAvatar").value = "";
+    await loadRooms();
   }
+};
 
-  document.getElementById("newRoomName").value = "";
-  document.getElementById("newPartnerName").value = "";
-  document.getElementById("newPreview").value = "";
-  document.getElementById("newAvatar").value = "";
+$("saveBanner").onclick = () => {
+  const url = $("bannerUrl").value.trim();
+  if (!url) return;
+  $("banner").innerHTML = `<img src="${esc(url)}" alt="배너">`;
+};
 
+$("logoutBtn").onclick = async () => {
+  await db.auth.signOut();
+  isAdmin = false;
+  currentUser = null;
+  currentVisitorId = null;
+  $("adminTools").classList.add("hidden");
+  $("adminLogin").classList.remove("hidden");
+  $("adminView").style.display = "none";
+  $("homeView").style.display = "block";
+  const {data,error} = await db.auth.signInAnonymously();
+  if (!error) currentUser = data.user;
   await loadRooms();
-  alert("채팅방을 추가했어요. 관리자 목록에서 열 수 있어요.");
-}
+};
 
-function renderAdminRooms(){
-  const box = document.getElementById("adminRoomList");
-  box.innerHTML = "";
+const adminButton = document.createElement("button");
+adminButton.textContent = "관리자";
+adminButton.style.cssText = "position:fixed;right:12px;bottom:78px;z-index:3;background:#333;color:#aaa;border:0;border-radius:20px;padding:8px 12px;font-size:11px";
+adminButton.onclick = openAdmin;
+document.body.appendChild(adminButton);
 
-  rooms.forEach(room => {
-    const item = document.createElement("div");
-    item.className = "admin-room";
-
-    const title = document.createElement("div");
-    title.textContent = room.room_name + " / " + room.partner_name;
-    title.style.fontWeight = "700";
-
-    const status = document.createElement("div");
-    status.className = "small";
-    status.textContent = room.is_open ? "실제 대화 가능" : "미리보기 전용";
-
-    const toggle = document.createElement("button");
-    toggle.className = "secondary";
-    toggle.textContent = room.is_open ? "대화방 닫기" : "대화방 열기";
-    toggle.onclick = () => toggleRoom(room);
-
-    const remove = document.createElement("button");
-    remove.className = "secondary";
-    remove.textContent = "채팅방 삭제";
-    remove.onclick = () => deleteRoom(room);
-
-    item.append(title,status,toggle,remove);
-    box.appendChild(item);
-  });
-}
-
-async function toggleRoom(room){
-  const currentlyOpen = rooms.filter(r => r.is_open).length;
-
-  if(!room.is_open && currentlyOpen >= 3){
-    alert("실제 대화방은 최대 3개까지만 열 수 있어요.");
-    return;
-  }
-
-  const {error} = await db.from("rooms")
-    .update({is_open:!room.is_open})
-    .eq("id",room.id);
-
-  if(error){
-    alert(error.message);
-    return;
-  }
-
-  await loadRooms();
-}
-
-async function deleteRoom(room){
-  if(!confirm(room.room_name+" 채팅방을 삭제할까요? 메시지도 함께 삭제돼요.")) return;
-
-  const {error} = await db.from("rooms").delete().eq("id",room.id);
-
-  if(error){
-    alert(error.message);
-    return;
-  }
-
-  await loadRooms();
-}
-
-// ======================================
-// 광고 이미지 변경
-// ======================================
-
-function changeBanner(){
-  const url = document.getElementById("bannerUrl").value.trim();
-  if(!url){
-    alert("이미지 주소를 입력해 주세요.");
-    return;
-  }
-
-  document.getElementById("banner").src = url;
-  document.getElementById("banner").style.display = "block";
-  document.getElementById("adEmpty").style.display = "none";
-
-  alert("현재 브라우저에서 광고 이미지가 변경됐어요. 모든 방문자에게 적용하려면 index.html의 DEFAULT_BANNER 주소도 바꿔야 해요.");
-}
-
-// ======================================
-// 기타
-// ======================================
-
-function closeChat(){
-  document.getElementById("chatScreen").classList.remove("show");
-  activeRoom = null;
-
-  if(messageChannel){
-    db.removeChannel(messageChannel);
-    messageChannel = null;
-  }
-
-  loadRooms();
-}
-
-function showSearch(){
-  document.getElementById("search").focus();
-  window.scrollTo({top:0,behavior:"smooth"});
-}
-
-function showChatInfo(){
-  if(activeRoom){
-    alert("상대방: "+activeRoom.partner_name);
-  }
-}
-
-function formatTime(value){
-  if(!value) return "";
-  return new Date(value).toLocaleTimeString("ko-KR",{
-    hour:"2-digit",
-    minute:"2-digit",
-    hour12:true
-  });
-}
-
-async function loadLatestMessages(){
-  const {data,error} = await db
-    .from("messages")
-    .select("*")
-    .order("created_at",{ascending:true})
-    .limit(300);
-
-  if(!error){
-    allMessages = data || [];
-    renderRooms();
-  }
-}
-
-currentUser = localStorage.getItem("talk_visitor_name") || null;
-
-loadRooms();
-loadLatestMessages();
-
-db.channel("all-message-updates")
-.on("postgres_changes",{
-  event:"INSERT",
-  schema:"public",
-  table:"messages"
-},payload=>{
-  if(!allMessages.some(m=>m.id===payload.new.id)){
-    allMessages.push(payload.new);
-  }
-  renderRooms();
-})
-.subscribe();
-
+start();
 </script>
 </body>
 </html>
