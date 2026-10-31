@@ -253,15 +253,13 @@ async function renderRooms(){
       ?latestByRoom.get(String(r.id))
       :null;
 
-    const preview=isAdmin
-      ?(r.preview_text||"대화를 시작해 보세요.")
-      :latest
-        ?(latest.content||(latest.image_url?"사진":""))
-        :"대화를 시작해 보세요.";
+    // 최신 메시지가 있으면 최신 메시지, 없으면 관리자가 설정한 미리보기 표시
+    const preview=latest
+      ?(latest.content||(latest.image_url?"사진":""))
+      :(r.preview_text||"대화를 시작해 보세요.");
 
-    const date=isAdmin
-      ?(r.last_message_at||r.created_at)
-      :(latest?.created_at||r.created_at);
+    // 최신 메시지가 없으면 관리자가 설정한 날짜 사용
+    const date=latest?.created_at||r.last_message_at||r.created_at;
 
     const dateText=date
       ?new Date(date).toLocaleDateString("en-US",{
