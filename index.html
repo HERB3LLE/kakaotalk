@@ -49,6 +49,14 @@ header{padding:calc(env(safe-area-inset-top) + 15px) 20px 0;background:#000}
 #sendInput::placeholder{color:#a1a1a6}
 #sendForm button{width:38px;height:38px;flex-shrink:0;border:0;border-radius:50%;background:#087eff;color:white;font-size:22px;font-weight:700;padding:0}
 #sendPlus{width:42px!important;height:42px!important;border:1px solid #444!important;border-radius:50%!important;background:rgba(48,48,52,.85)!important;color:#fff!important;font-size:30px!important}
+.msg-image{display:block;max-width:min(260px,72vw);max-height:360px;object-fit:contain;border-radius:13px;margin-top:5px;cursor:zoom-in}
+.image-only{padding:3px!important;background:transparent!important}
+#imageViewer{display:none;position:fixed;inset:0;background:#000e;z-index:100;align-items:center;justify-content:center;padding:18px}
+#imageViewer img{max-width:100%;max-height:90dvh;object-fit:contain}
+#imageViewer button{position:absolute;right:18px;top:calc(env(safe-area-inset-top) + 12px);background:#333;color:white;border:0;border-radius:50%;width:42px;height:42px;font-size:25px}
+.image-preview{max-width:130px;max-height:110px;display:block;border-radius:8px;margin:6px 0}
+.file-label{display:inline-block;padding:10px 13px;border-radius:9px;background:#e5e5ea;color:#111;font-weight:600;margin:4px 0}
+.shared-image{max-width:180px;max-height:150px;border-radius:8px;display:block;margin:6px 0;cursor:zoom-in}
 .panel{padding:18px;overflow-y:auto;height:calc(100dvh - 60px);background:#fff;color:#111}
 .panel input,.panel select,.panel textarea{width:100%;padding:12px;margin:6px 0 12px;border:1px solid #d1d1d6;border-radius:9px;background:#f7f7f9;color:#111}
 .panel textarea{min-height:75px;resize:vertical}
@@ -89,6 +97,7 @@ h3{font-size:16px;margin:20px 0 10px}
   <div id="messages"></div>
   <form id="sendForm">
     <button type="button" id="sendPlus">＋</button>
+    <input id="chatImageInput" type="file" accept="image/*" hidden>
     <input id="sendInput" placeholder="iMessage" autocomplete="off">
     <button type="submit">↑</button>
   </form>
@@ -121,6 +130,9 @@ h3{font-size:16px;margin:20px 0 10px}
         <option value="visitor">김 (오른쪽 파란색)</option>
       </select>
       <textarea id="sharedContent" placeholder="공통 대화 내용"></textarea>
+      <label class="file-label" for="sharedImageInput">사진 선택</label>
+      <input id="sharedImageInput" type="file" accept="image/*" hidden>
+      <div id="sharedImagePreview"></div>
       <label class="small" for="sharedDateTime">날짜 및 시간</label>
       <input id="sharedDateTime" type="datetime-local">
       <button class="action" id="addSharedBtn">공통 메시지 추가</button>
@@ -157,6 +169,11 @@ h3{font-size:16px;margin:20px 0 10px}
   </div>
 </div>
 
+<div id="imageViewer" onclick="if(event.target===this)this.style.display='none'">
+  <button type="button" id="closeImageViewer">×</button>
+  <img id="largeImage" alt="사진 크게 보기">
+</div>
+
 <script>
 const SUPABASE_URL="https://ieblvlcqngmmiwpvrzoq.supabase.co";
 const SUPABASE_KEY="sb_publishable_XFHlSKeuFq_OuXKrSzRU0A_uOA9c8VT";
@@ -165,6 +182,7 @@ const db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 let currentUser=null,currentRoom=null,currentPartner="";
 let currentVisitorId=null,isAdmin=false,realtimeChannel=null;
 let roomsCache=[],editingRoomId=null,editingSharedId=null;
+let sharedSelectedFile=null;
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -288,6 +306,21 @@ function renderMessages(data){
   });
 }
 
+function showLargeImage(url){
+  $("largeImage").src=url;
+  $("imageViewer").style.display="flex";
+}
+$("closeImageViewer").onclick=()=>{
+  $("imageViewer").style.display="none";
+  $("largeImage").src="";
+};
+
+function messageMarkup(m){
+  const content=m.content?esc(m.content):"";
+  const photo=m.image_url?`<img class="msg-image" src="${esc(m.image_url)}" alt="첨부 사진" onclick="showLargeImage(this.src)">`:"";
+  return (content?`<div class="bubble">${content}</div>`:"")+(photo?`<div class="bubble image-only">${photo}</div>`:"");
+}
+
 function appendMessage(m){
   if($("messages").querySelector('[data-message="'+m.id+'"]'))return;
   const mine=isAdmin?m.sender_type==="admin":m.sender_type==="visitor";
@@ -296,11 +329,66 @@ function appendMessage(m){
   el.dataset.message=m.id;
   el.innerHTML=`
     ${isAdmin&&!mine?`<div class="msg-name">${esc(m.sender_name)}</div>`:""}
-    <div class="bubble">${esc(m.content)}</div>
+    ${messageMarkup(m)}
     <div class="msg-time"></div>`;
   $("messages").appendChild(el);
   $("messages").scrollTop=$("messages").scrollHeight;
 }
+
+async function uploadImage(file,pathPrefix){
+  if(!file)return null;
+  if(!file.type.startsWith("image/")){
+    alert("이미지 파일만 선택할 수 있어요.");
+    return null;
+  }
+  if(file.size>15*1024*1024){
+    alert("사진은 15MB 이하로 선택해 주세요.");
+    return null;
+  }
+  const ext=(file.name.split(".").pop()||"img").toLowerCase().replace(/[^a-z0-9]/g,"")||"img";
+  const path=`${pathPrefix}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const {error}=await db.storage.from("chat-images").upload(path,file,{
+    contentType:file.type,
+    upsert:false
+  });
+  if(error){
+    alert("사진 업로드 실패: "+error.message);
+    return null;
+  }
+  return db.storage.from("chat-images").getPublicUrl(path).data.publicUrl;
+}
+
+$("chatImageInput").addEventListener("change",async()=>{
+  const file=$("chatImageInput").files?.[0];
+  if(!file)return;
+  if(!currentRoom){
+    alert("채팅방을 먼저 열어 주세요.");
+    $("chatImageInput").value="";
+    return;
+  }
+  const url=await uploadImage(file,`${currentRoom}/${currentUser.id}`);
+  if(url){
+    const senderName=isAdmin?(currentPartner||"관리자"):(localStorage.getItem("chat_display_name")||"방문자");
+    const {error}=await db.from("messages").insert({
+      room_id:currentRoom,
+      visitor_id:isAdmin?currentVisitorId:currentUser.id,
+      sender_type:isAdmin?"admin":"visitor",
+      sender_name:senderName,
+      content:"",
+      image_url:url
+    });
+    if(error)alert("사진 메시지 등록 실패: "+error.message);
+    else if(!isAdmin){
+      await db.from("rooms").update({
+        preview_text:"사진",
+        last_message_at:new Date().toISOString()
+      }).eq("id",currentRoom);
+    }
+  }
+  $("chatImageInput").value="";
+});
+
+$("sendPlus").onclick=()=>$("chatImageInput").click();
 
 $("sendForm").addEventListener("submit",async e=>{
   e.preventDefault();
@@ -309,16 +397,19 @@ $("sendForm").addEventListener("submit",async e=>{
   const visitorId=isAdmin?currentVisitorId:currentUser.id;
   const senderName=isAdmin?(currentPartner||"관리자"):(localStorage.getItem("chat_display_name")||"방문자");
   const {error}=await db.from("messages").insert({
-    room_id:currentRoom,visitor_id:visitorId,
+    room_id:currentRoom,
+    visitor_id:visitorId,
     sender_type:isAdmin?"admin":"visitor",
-    sender_name:senderName,content
+    sender_name:senderName,
+    content
   });
   if(error){alert("메시지 전송 실패: "+error.message);return}
   $("sendInput").value="";
-  if(!isAdmin)await db.from("rooms").update({preview_text:content,last_message_at:new Date().toISOString()}).eq("id",currentRoom);
+  if(!isAdmin)await db.from("rooms").update({
+    preview_text:content,
+    last_message_at:new Date().toISOString()
+  }).eq("id",currentRoom);
 });
-
-$("sendPlus").onclick=()=>alert("사진 첨부 기능은 아직 연결되어 있지 않아요.");
 
 $("backBtn").onclick=async()=>{
   $("chatView").style.display="none";
@@ -379,6 +470,13 @@ function renderSharedRoomOptions(){
 
 $("sharedRoomSelect").addEventListener("change",loadSharedMessages);
 
+$("sharedImageInput").addEventListener("change",()=>{
+  sharedSelectedFile=$("sharedImageInput").files?.[0]||null;
+  $("sharedImagePreview").innerHTML=sharedSelectedFile
+    ?`<img class="image-preview" src="${URL.createObjectURL(sharedSelectedFile)}" alt="선택한 사진">`
+    :"";
+});
+
 function setDefaultSharedDateTime(){
   const d=new Date();
   d.setMinutes(d.getMinutes()-d.getTimezoneOffset());
@@ -399,6 +497,7 @@ async function loadSharedMessages(){
     <div class="shared-item">
       <strong>${m.sender_type==="visitor"?"김 · 오른쪽":"노 · 왼쪽"}</strong>
       <div class="content">${esc(m.content)}</div>
+      ${m.image_url?`<img class="shared-image" src="${esc(m.image_url)}" alt="공통 사진" onclick="showLargeImage(this.src)">`:""}
       <div class="small">${formatEnglishDate(m.created_at)}</div>
       <button class="action secondary" data-shared-edit="${esc(m.id)}">수정</button>
       <button class="action danger" data-shared-delete="${esc(m.id)}">삭제</button>
@@ -411,16 +510,33 @@ $("addSharedBtn").onclick=async()=>{
   const content=$("sharedContent").value.trim();
   const senderType=$("sharedSender").value;
   if(!roomId){alert("채팅방을 선택해 주세요.");return}
-  if(!content){alert("메시지 내용을 입력해 주세요.");return}
+  const file=sharedSelectedFile;
+  if(!content&&!file){alert("메시지 내용이나 사진을 추가해 주세요.");return}
   const senderName=senderType==="visitor"?"김":"노";
   const dateValue=$("sharedDateTime").value;
   if(!dateValue){alert("날짜와 시간을 선택해 주세요.");return}
+
+  let image_url=null;
+  if(file){
+    image_url=await uploadImage(file,`shared/${roomId}`);
+    if(!image_url)return;
+  }
+
   const {error}=await db.from("messages").insert({
-    room_id:roomId,visitor_id:null,sender_type:senderType,sender_name:senderName,content,
+    room_id:roomId,
+    visitor_id:null,
+    sender_type:senderType,
+    sender_name:senderName,
+    content,
+    image_url,
     created_at:new Date(dateValue).toISOString()
   });
   if(error){alert("공통 메시지 등록 실패: "+error.message);return}
+
   $("sharedContent").value="";
+  $("sharedImageInput").value="";
+  $("sharedImagePreview").innerHTML="";
+  sharedSelectedFile=null;
   setDefaultSharedDateTime();
   await loadSharedMessages();
   alert("공통 메시지를 추가했어요!");
@@ -434,15 +550,52 @@ $("sharedMessages").addEventListener("click",async e=>{
     const id=edit.dataset.sharedEdit;
     const {data,error}=await db.from("messages").select("*").eq("id",id).is("visitor_id",null).single();
     if(error||!data){alert("메시지를 불러오지 못했어요.");return}
-    const next=prompt("공통 메시지 수정",data.content);
+
+    const next=prompt("공통 메시지 수정 (사진만 있는 경우 비워 두어도 돼요)",data.content||"");
     if(next===null)return;
-    if(!next.trim()){alert("메시지 내용을 입력해 주세요.");return}
+
     const dt=new Date(data.created_at);
     const localDt=new Date(dt.getTime()-dt.getTimezoneOffset()*60000).toISOString().slice(0,16);
     const nextDate=prompt("날짜와 시간 수정 (YYYY-MM-DDTHH:mm)",localDt);
     if(nextDate===null)return;
-    if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(nextDate)||isNaN(new Date(nextDate).getTime())){alert("날짜 형식을 YYYY-MM-DDTHH:mm으로 입력해 주세요.");return}
-    const {error:updateError}=await db.from("messages").update({content:next.trim(),created_at:new Date(nextDate).toISOString()}).eq("id",id).is("visitor_id",null);
+    if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(nextDate)||isNaN(new Date(nextDate).getTime())){
+      alert("날짜 형식을 YYYY-MM-DDTHH:mm으로 입력해 주세요.");
+      return;
+    }
+
+    let image_url=data.image_url||null;
+    const choice=prompt("사진 처리: 1 = 유지, 2 = 새 사진으로 교체, 3 = 사진 삭제","1");
+    if(choice===null)return;
+
+    if(choice==="2"){
+      const picker=document.createElement("input");
+      picker.type="file";
+      picker.accept="image/*";
+      const file=await new Promise(resolve=>{
+        picker.onchange=()=>resolve(picker.files?.[0]||null);
+        picker.click();
+      });
+      if(!file)return;
+      image_url=await uploadImage(file,`shared/${data.room_id}`);
+      if(!image_url)return;
+    }else if(choice==="3"){
+      image_url=null;
+    }else if(choice!=="1"){
+      alert("1, 2, 3 중에서 선택해 주세요.");
+      return;
+    }
+
+    if(!next.trim()&&!image_url){
+      alert("메시지 내용이나 사진이 있어야 해요.");
+      return;
+    }
+
+    const {error:updateError}=await db.from("messages").update({
+      content:next.trim(),
+      image_url,
+      created_at:new Date(nextDate).toISOString()
+    }).eq("id",id).is("visitor_id",null);
+
     if(updateError){alert("수정 실패: "+updateError.message);return}
     await loadSharedMessages();
     return;
@@ -458,7 +611,7 @@ $("sharedMessages").addEventListener("click",async e=>{
 
 async function loadVisitorThreads(){
   const {data,error}=await db.from("messages")
-    .select("room_id,visitor_id,content,created_at,sender_name,sender_type")
+    .select("room_id,visitor_id,content,image_url,created_at,sender_name,sender_type")
     .not("visitor_id","is",null)
     .order("created_at",{ascending:false});
   if(error){$("visitorThreads").textContent="대화를 불러오지 못했어요: "+error.message;return}
@@ -467,7 +620,13 @@ async function loadVisitorThreads(){
   for(const m of data||[]){
     const key=m.room_id+"_"+m.visitor_id;
     if(!threadsMap.has(key)){
-      threadsMap.set(key,{room_id:m.room_id,visitor_id:m.visitor_id,content:m.content,created_at:m.created_at,visitor_name:""});
+      threadsMap.set(key,{
+        room_id:m.room_id,
+        visitor_id:m.visitor_id,
+        content:m.content||(m.image_url?"사진":""),
+        created_at:m.created_at,
+        visitor_name:""
+      });
     }
     const thread=threadsMap.get(key);
     if(m.sender_type==="visitor"&&!thread.visitor_name&&m.sender_name)thread.visitor_name=m.sender_name;
