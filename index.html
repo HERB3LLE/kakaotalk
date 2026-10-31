@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -224,24 +223,29 @@ async function renderRooms(){
   let latestByRoom=new Map();
 
   if(!isAdmin && currentUser && roomsCache.length){
-    const roomIds=roomsCache.map(r=>r.id);
+    const results=await Promise.all(
+      roomsCache.map(async room=>{
+        const {data,error}=await db.from("messages")
+          .select("room_id,visitor_id,sender_type,content,image_url,created_at")
+          .eq("room_id",room.id)
+          .or("visitor_id.is.null,visitor_id.eq."+currentUser.id)
+          .order("created_at",{ascending:false})
+          .limit(1);
 
-    const {data,error}=await db.from("messages")
-      .select("room_id,visitor_id,sender_type,content,image_url,created_at")
-      .in("room_id",roomIds)
-      .or(`visitor_id.is.null,visitor_id.eq.${currentUser.id}`)
-      .order("created_at",{ascending:false});
-
-    if(error){
-      console.error("미리보기 불러오기 실패:",error);
-    }else{
-      for(const m of data||[]){
-        const key=String(m.room_id);
-        if(!latestByRoom.has(key)){
-          latestByRoom.set(key,m);
+        if(error){
+          console.error("미리보기 불러오기 실패:",room.id,error);
+          return null;
         }
+
+        return data?.[0]||null;
+      })
+    );
+
+    results.forEach(m=>{
+      if(m){
+        latestByRoom.set(String(m.room_id),m);
       }
-    }
+    });
   }
 
   $("roomList").innerHTML=roomsCache.map(r=>{
