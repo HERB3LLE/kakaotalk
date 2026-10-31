@@ -198,10 +198,18 @@ async function start(){
   await loadRooms();
 }
 
-/* 채팅방 목록 불러오기 */
 async function loadRooms(){
-  const {data,error}=await db.from("rooms").select("*").order("sort_order").order("created_at");
-  if(error){$("roomList").textContent="채팅방을 불러오지 못했어요.";console.error(error);return}
+  const {data,error}=await db.from("rooms")
+    .select("*")
+    .order("sort_order")
+    .order("created_at");
+
+  if(error){
+    $("roomList").textContent="채팅방을 불러오지 못했어요.";
+    console.error(error);
+    return;
+  }
+
   roomsCache=data||[];
   await renderRooms();
 
@@ -211,65 +219,59 @@ async function loadRooms(){
   }
 }
 
-/*
-  방문자 미리보기:
-  현재 방문자의 메시지 + 공통 메시지 중 sender_type이 visitor인 메시지만 조회.
-  다른 방문자의 메시지와 관리자 메시지는 제외.
-*/
+/* 방문자별 최신 메시지 미리보기 */
 async function renderRooms(){
-  let previewMap=new Map();
+  let latestByRoom=new Map();
 
-  if(!isAdmin&&currentUser&&roomsCache.length){
+  if(!isAdmin && currentUser && roomsCache.length){
     const roomIds=roomsCache.map(r=>r.id);
 
     const {data,error}=await db.from("messages")
       .select("room_id,visitor_id,sender_type,content,image_url,created_at")
       .in("room_id",roomIds)
       .or(`visitor_id.is.null,visitor_id.eq.${currentUser.id}`)
-      .eq("sender_type","visitor")
       .order("created_at",{ascending:false});
 
     if(error){
-      console.error("미리보기 조회 실패:",error);
+      console.error("미리보기 불러오기 실패:",error);
     }else{
       for(const m of data||[]){
-        if(!previewMap.has(String(m.room_id))){
-          previewMap.set(String(m.room_id),m);
+        const key=String(m.room_id);
+        if(!latestByRoom.has(key)){
+          latestByRoom.set(key,m);
         }
       }
     }
   }
 
   $("roomList").innerHTML=roomsCache.map(r=>{
-    const latest=previewMap.get(String(r.id));
+    const latest=!isAdmin
+      ?latestByRoom.get(String(r.id))
+      :null;
 
-    let previewText;
-    let date;
+    const preview=isAdmin
+      ?(r.preview_text||"대화를 시작해 보세요.")
+      :latest
+        ?(latest.content||(latest.image_url?"사진":""))
+        :"대화를 시작해 보세요.";
 
-    if(isAdmin){
-      previewText=r.preview_text||"대화를 시작해 보세요.";
-      date=r.last_message_at||r.created_at;
-    }else if(latest){
-      previewText=latest.content||(latest.image_url?"사진":"대화를 시작해 보세요.");
-      date=latest.created_at;
-    }else{
-      /*
-        이전 버전에서 저장된 preview_text에는 다른 방문자의
-        메시지가 들어 있을 수 있으므로 방문자 화면에서는 사용하지 않음.
-      */
-      previewText="대화를 시작해 보세요.";
-      date=r.created_at;
-    }
+    const date=isAdmin
+      ?(r.last_message_at||r.created_at)
+      :(latest?.created_at||r.created_at);
 
     const dateText=date
-      ?new Date(date).toLocaleDateString("en-US",{month:"numeric",day:"numeric",year:"2-digit"})
+      ?new Date(date).toLocaleDateString("en-US",{
+        month:"numeric",
+        day:"numeric",
+        year:"2-digit"
+      })
       :"";
 
     return `<div class="room" data-room="${esc(r.id)}">
       <div class="avatar">${r.avatar_url?`<img src="${esc(r.avatar_url)}">`:"●"}</div>
       <div class="room-info">
         <div class="room-name">${esc(r.partner_name||r.room_name)}</div>
-        <div class="preview">${esc(previewText)}</div>
+        <div class="preview">${esc(preview)}</div>
       </div>
       <div class="time">${dateText}</div>
     </div>`;
@@ -430,13 +432,6 @@ $("chatImageInput").addEventListener("change",async()=>{
       image_url:url
     });
     if(error)alert("사진 메시지 등록 실패: "+error.message);
-    else if(!isAdmin){
-      /*
-        rooms.preview_text는 방문자별로 분리되지 않은 공용 필드이므로
-        방문자 메시지 전송 시에는 수정하지 않음.
-      */
-      await loadRooms();
-    }
   }
   $("chatImageInput").value="";
 });
@@ -458,7 +453,6 @@ $("sendForm").addEventListener("submit",async e=>{
   });
   if(error){alert("메시지 전송 실패: "+error.message);return}
   $("sendInput").value="";
-  if(!isAdmin)await loadRooms();
 });
 
 $("backBtn").onclick=async()=>{
@@ -589,7 +583,6 @@ $("addSharedBtn").onclick=async()=>{
   sharedSelectedFile=null;
   setDefaultSharedDateTime();
   await loadSharedMessages();
-  await loadRooms();
   alert("공통 메시지를 추가했어요!");
 };
 
@@ -649,7 +642,6 @@ $("sharedMessages").addEventListener("click",async e=>{
 
     if(updateError){alert("수정 실패: "+updateError.message);return}
     await loadSharedMessages();
-    await loadRooms();
     return;
   }
 
@@ -658,7 +650,6 @@ $("sharedMessages").addEventListener("click",async e=>{
     const {error}=await db.from("messages").delete().eq("id",del.dataset.sharedDelete).is("visitor_id",null);
     if(error){alert("삭제 실패: "+error.message);return}
     await loadSharedMessages();
-    await loadRooms();
   }
 });
 
@@ -715,6 +706,7 @@ function renderAdminRooms(){
   </div>`).join("");
 }
 
+/* 채팅방 프로필 및 날짜 수정 */
 function openProfileEditor(room){
   editingRoomId=room.id;
   $("editRoomName").value=room.room_name||"";
@@ -786,6 +778,7 @@ $("saveProfile").onclick=async()=>{
   alert("프로필과 날짜를 수정했어요!");
 };
 
+/* 채팅방 순서 변경 */
 async function moveRoom(roomId,direction){
   const index=roomsCache.findIndex(r=>String(r.id)===String(roomId));
   const nextIndex=index+Number(direction);
