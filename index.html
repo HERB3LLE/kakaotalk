@@ -81,16 +81,26 @@ h3{font-size:16px;margin:20px 0 10px}
 .shared-item .content{font-size:14px;margin:6px 0;white-space:pre-wrap;overflow-wrap:anywhere}
 @media(max-width:380px){.room{gap:10px;padding-left:20px}.avatar{width:45px;height:45px}.room::after{left:75px}.room-name{font-size:14px}.preview{font-size:12px}.time{font-size:12px}}
 </style>
+
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 <script>
-  window.OneSignalDeferred = window.OneSignalDeferred || [];
+window.OneSignalDeferred = window.OneSignalDeferred || [];
+window.OneSignalReady = new Promise((resolve, reject) => {
   OneSignalDeferred.push(async function(OneSignal) {
-    await OneSignal.init({
-      appId: "a408ccca-71f7-4ae0-ab17-cdb351a966b0",
-    });
+    try {
+      await OneSignal.init({
+        appId: "a408ccca-71f7-4ae0-ab17-cdb351a966b0"
+      });
+      resolve(OneSignal);
+    } catch (error) {
+      console.error("OneSignal 초기화 실패:", error);
+      reject(error);
+    }
   });
+});
 </script>
 </head>
+
 <body>
 <div id="app">
 <header><span id="pageTitle">Messages</span></header>
@@ -124,6 +134,7 @@ h3{font-size:16px;margin:20px 0 10px}
       <button class="action" id="loginBtn" type="button">로그인</button>
       <div id="loginStatus" class="small" role="status"></div>
     </div>
+
     <div id="adminTools" class="hidden">
       <h3>채팅방 관리</h3>
       <input id="newRoomName" placeholder="채팅방 이름">
@@ -197,6 +208,7 @@ let loginInProgress=false;
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
+/* 사이트 시작 */
 async function start(){
   try{
     const {data:{session},error:sessionError}=await db.auth.getSession();
@@ -347,6 +359,7 @@ async function loadMessages(){
   if(error){alert("메시지를 불러오지 못했어요: "+error.message);return}
   renderMessages(data||[]);
 }
+
 function formatEnglishDate(value){
   const d=new Date(value);
   const date=d.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"});
@@ -374,6 +387,7 @@ function showLargeImage(url){
   $("largeImage").src=url;
   $("imageViewer").style.display="flex";
 }
+
 $("closeImageViewer").onclick=()=>{
   $("imageViewer").style.display="none";
   $("largeImage").src="";
@@ -397,6 +411,21 @@ function appendMessage(m){
     <div class="msg-time"></div>`;
   $("messages").appendChild(el);
   $("messages").scrollTop=$("messages").scrollHeight;
+}
+
+/* 관리자 기기 푸시 알림 등록 */
+async function registerAdminPush(){
+  try{
+    const OneSignal=await window.OneSignalReady;
+
+    await OneSignal.User.PushSubscription.optIn();
+    await OneSignal.User.addTag("role","admin");
+
+    console.log("관리자 푸시 등록 완료");
+    console.log("구독 ID:",OneSignal.User.PushSubscription.id);
+  }catch(error){
+    console.error("관리자 푸시 등록 실패:",error);
+  }
 }
 
 /* 방문자 메시지 알림 요청 */
@@ -503,6 +532,7 @@ async function openAdmin(){
   $("chatView").style.display="none";
   $("adminView").style.display="flex";
 }
+
 const adminButton=document.createElement("button");
 adminButton.textContent="관리자";
 adminButton.style.cssText="position:fixed;right:12px;bottom:8px;z-index:7;background:transparent;color:#777;border:0;padding:5px;font-size:10px";
@@ -575,6 +605,9 @@ $("loginBtn").onclick=async()=>{
 
     isAdmin=true;
 
+    /* 관리자 로그인 성공 후 이 기기를 푸시 수신 대상으로 등록 */
+    void registerAdminPush();
+
     $("adminLogin").classList.add("hidden");
     $("adminTools").classList.remove("hidden");
     status.textContent="";
@@ -599,6 +632,7 @@ $("loginBtn").onclick=async()=>{
     button.textContent="로그인";
   }
 };
+
 function renderSharedRoomOptions(){
   const old=$("sharedRoomSelect").value;
   $("sharedRoomSelect").innerHTML=roomsCache.map(r=>
@@ -1056,7 +1090,7 @@ $("addRoomBtn").onclick=async()=>{
   }
 };
 
-/* 로그아웃 */
+/* 로그아웃: OneSignal 구독 및 관리자 태그는 유지 */
 $("logoutBtn").onclick=async()=>{
   try{
     if(realtimeChannel){
