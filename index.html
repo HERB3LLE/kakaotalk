@@ -347,7 +347,6 @@ async function loadMessages(){
   if(error){alert("메시지를 불러오지 못했어요: "+error.message);return}
   renderMessages(data||[]);
 }
-
 function formatEnglishDate(value){
   const d=new Date(value);
   const date=d.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"});
@@ -400,6 +399,18 @@ function appendMessage(m){
   $("messages").scrollTop=$("messages").scrollHeight;
 }
 
+/* 방문자 메시지 알림 요청 */
+async function notifyAdmin(messageId){
+  try{
+    const {error}=await db.functions.invoke("notify-admin",{
+      body:{message_id:messageId}
+    });
+    if(error)console.error("알림 전송 실패:",error);
+  }catch(error){
+    console.error("알림 전송 오류:",error);
+  }
+}
+
 async function uploadImage(file,pathPrefix){
   if(!file)return null;
   if(!file.type.startsWith("image/")){
@@ -422,6 +433,7 @@ async function uploadImage(file,pathPrefix){
   return db.storage.from("chat-images").getPublicUrl(path).data.publicUrl;
 }
 
+/* 사진 메시지 전송 */
 $("chatImageInput").addEventListener("change",async()=>{
   const file=$("chatImageInput").files?.[0];
   if(!file)return;
@@ -433,36 +445,48 @@ $("chatImageInput").addEventListener("change",async()=>{
   const url=await uploadImage(file,`${currentRoom}/${currentUser.id}`);
   if(url){
     const senderName=isAdmin?(currentPartner||"관리자"):(localStorage.getItem("chat_display_name")||"방문자");
-    const {error}=await db.from("messages").insert({
+    const {data,error}=await db.from("messages").insert({
       room_id:currentRoom,
       visitor_id:isAdmin?currentVisitorId:currentUser.id,
       sender_type:isAdmin?"admin":"visitor",
       sender_name:senderName,
       content:"",
       image_url:url
-    });
-    if(error)alert("사진 메시지 등록 실패: "+error.message);
+    }).select("id").single();
+
+    if(error){
+      alert("사진 메시지 등록 실패: "+error.message);
+    }else if(!isAdmin){
+      void notifyAdmin(data.id);
+    }
   }
   $("chatImageInput").value="";
 });
 
 $("sendPlus").onclick=()=>$("chatImageInput").click();
 
+/* 텍스트 메시지 전송 */
 $("sendForm").addEventListener("submit",async e=>{
   e.preventDefault();
   const content=$("sendInput").value.trim();
   if(!content||!currentRoom)return;
   const visitorId=isAdmin?currentVisitorId:currentUser.id;
   const senderName=isAdmin?(currentPartner||"관리자"):(localStorage.getItem("chat_display_name")||"방문자");
-  const {error}=await db.from("messages").insert({
+
+  const {data,error}=await db.from("messages").insert({
     room_id:currentRoom,
     visitor_id:visitorId,
     sender_type:isAdmin?"admin":"visitor",
     sender_name:senderName,
     content
-  });
+  }).select("id").single();
+
   if(error){alert("메시지 전송 실패: "+error.message);return}
   $("sendInput").value="";
+
+  if(!isAdmin){
+    void notifyAdmin(data.id);
+  }
 });
 
 $("backBtn").onclick=async()=>{
@@ -489,6 +513,7 @@ $("adminBack").onclick=()=>{
   $("adminView").style.display="none";
   $("homeView").style.display="block";
 };
+
 /* 관리자 로그인 */
 $("loginBtn").onclick=async()=>{
   if(loginInProgress)return;
@@ -574,7 +599,6 @@ $("loginBtn").onclick=async()=>{
     button.textContent="로그인";
   }
 };
-
 function renderSharedRoomOptions(){
   const old=$("sharedRoomSelect").value;
   $("sharedRoomSelect").innerHTML=roomsCache.map(r=>
@@ -622,7 +646,7 @@ async function loadSharedMessages(){
 
   $("sharedMessages").innerHTML=(data||[]).map(m=>`
     <div class="shared-item">
-      <strong>${m.sender_type==="visitor"?"김 · 오른쪽":"노 · 왼쪽"}</strong>
+      <strong>${m.sender_type==="visitor"?"김 · 오른쪽 파란색":"노 · 왼쪽 회색"}</strong>
       <div class="content">${esc(m.content)}</div>
       ${m.image_url?`<img class="shared-image" src="${esc(m.image_url)}" alt="공통 사진" onclick="showLargeImage(this.src)">`:""}
       <div class="small">${formatEnglishDate(m.created_at)}</div>
@@ -632,6 +656,7 @@ async function loadSharedMessages(){
   `).join("")||"<p class='small'>등록된 공통 대화가 없어요.</p>";
 }
 
+/* 공통 메시지 추가: 알림을 보내지 않음 */
 $("addSharedBtn").onclick=async()=>{
   const roomId=$("sharedRoomSelect").value;
   const content=$("sharedContent").value.trim();
@@ -854,6 +879,7 @@ $("visitorThreads").addEventListener("click",async e=>{
   const room=roomsCache.find(r=>String(r.id)===b.dataset.threadRoom);
   if(room)await openChat(room,b.dataset.threadVisitor);
 });
+
 function renderAdminRooms(){
   $("adminRooms").innerHTML=roomsCache.map(r=>`
   <div class="admin-room">
