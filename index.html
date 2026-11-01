@@ -81,6 +81,15 @@ h3{font-size:16px;margin:20px 0 10px}
 .shared-item .content{font-size:14px;margin:6px 0;white-space:pre-wrap;overflow-wrap:anywhere}
 @media(max-width:380px){.room{gap:10px;padding-left:20px}.avatar{width:45px;height:45px}.room::after{left:75px}.room-name{font-size:14px}.preview{font-size:12px}.time{font-size:12px}}
 </style>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script>
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  OneSignalDeferred.push(async function(OneSignal) {
+    await OneSignal.init({
+      appId: "a408ccca-71f7-4ae0-ab17-cdb351a966b0",
+    });
+  });
+</script>
 </head>
 <body>
 <div id="app">
