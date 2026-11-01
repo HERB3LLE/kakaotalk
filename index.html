@@ -5,16 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>김주은의 iPhone</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-<script>
-window.OneSignalDeferred = window.OneSignalDeferred || [];
-const oneSignalReady = new Promise(resolve => {
-  OneSignalDeferred.push(async function(OneSignal) {
-    await OneSignal.init({ appId: "03f70c22-4643-47b1-a080-e6100453c14d" });
-    resolve(OneSignal);
-  });
-});
-</script>
 <style>
 *{box-sizing:border-box}
 :root{color-scheme:dark}
@@ -125,10 +115,6 @@ h3{font-size:16px;margin:20px 0 10px}
       <button class="action" id="loginBtn">로그인</button>
     </div>
     <div id="adminTools" class="hidden">
-      <h3>관리자 알림</h3>
-      <button class="action" id="enablePushBtn">관리자 알림 켜기</button>
-      <div class="small">방문자가 메시지나 사진을 보내면 알림을 받아요.</div>
-
       <h3>채팅방 관리</h3>
       <input id="newRoomName" placeholder="채팅방 이름">
       <input id="newPartnerName" placeholder="상대방 이름">
@@ -200,32 +186,6 @@ let sharedSelectedFile=null;
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
-async function enableAdminPush(){
-  try{
-    const OneSignal=await oneSignalReady;
-    await OneSignal.User.addTag("role","admin");
-    await OneSignal.Notifications.requestPermission();
-    if(OneSignal.Notifications.permission){
-      alert("관리자 알림이 설정되었어요!");
-    }else{
-      alert("알림 권한이 허용되지 않았어요. 브라우저 설정을 확인해 주세요.");
-    }
-  }catch(error){
-    console.error("알림 설정 실패:",error);
-    alert("알림 설정에 실패했어요: "+error.message);
-  }
-}
-
-async function notifyAdmin(messageId){
-  if(!messageId)return;
-  const {error}=await db.functions.invoke("notify-admin",{
-    body:{message_id:messageId}
-  });
-  if(error)console.error("관리자 알림 전송 실패:",error);
-}
-
-$("enablePushBtn").onclick=enableAdminPush;
-
 async function start(){
   const {data:{session}}=await db.auth.getSession();
   if(session)currentUser=session.user;
@@ -293,12 +253,15 @@ async function renderRooms(){
       ?latestByRoom.get(String(r.id))
       :null;
 
+    // 최신 메시지가 있으면 최신 메시지, 없으면 관리자가 설정한 미리보기 표시
     const preview=latest
       ?(latest.content||(latest.image_url?"사진":""))
       :(r.preview_text||"대화를 시작해 보세요.");
 
+    // 최신 메시지가 없으면 관리자가 설정한 날짜 사용
     const date=latest?.created_at||r.last_message_at||r.created_at;
-        const dateText=date
+
+    const dateText=date
       ?new Date(date).toLocaleDateString("en-US",{
         month:"numeric",
         day:"numeric",
@@ -462,16 +425,15 @@ $("chatImageInput").addEventListener("change",async()=>{
   const url=await uploadImage(file,`${currentRoom}/${currentUser.id}`);
   if(url){
     const senderName=isAdmin?(currentPartner||"관리자"):(localStorage.getItem("chat_display_name")||"방문자");
-    const {data,error}=await db.from("messages").insert({
+    const {error}=await db.from("messages").insert({
       room_id:currentRoom,
       visitor_id:isAdmin?currentVisitorId:currentUser.id,
       sender_type:isAdmin?"admin":"visitor",
       sender_name:senderName,
       content:"",
       image_url:url
-    }).select("id").single();
+    });
     if(error)alert("사진 메시지 등록 실패: "+error.message);
-    else if(!isAdmin)await notifyAdmin(data.id);
   }
   $("chatImageInput").value="";
 });
@@ -484,16 +446,15 @@ $("sendForm").addEventListener("submit",async e=>{
   if(!content||!currentRoom)return;
   const visitorId=isAdmin?currentVisitorId:currentUser.id;
   const senderName=isAdmin?(currentPartner||"관리자"):(localStorage.getItem("chat_display_name")||"방문자");
-  const {data,error}=await db.from("messages").insert({
+  const {error}=await db.from("messages").insert({
     room_id:currentRoom,
     visitor_id:visitorId,
     sender_type:isAdmin?"admin":"visitor",
     sender_name:senderName,
     content
-  }).select("id").single();
+  });
   if(error){alert("메시지 전송 실패: "+error.message);return}
   $("sendInput").value="";
-  if(!isAdmin)await notifyAdmin(data.id);
 });
 
 $("backBtn").onclick=async()=>{
@@ -537,12 +498,6 @@ $("loginBtn").onclick=async()=>{
     return;
   }
   isAdmin=true;
-  try{
-    const OneSignal=await oneSignalReady;
-    await OneSignal.User.addTag("role","admin");
-  }catch(error){
-    console.error("관리자 태그 등록 실패:",error);
-  }
   $("adminLogin").classList.add("hidden");
   $("adminTools").classList.remove("hidden");
   await loadRooms();
@@ -550,6 +505,7 @@ $("loginBtn").onclick=async()=>{
   await loadVisitorThreads();
   await loadSharedMessages();
 };
+
 function renderSharedRoomOptions(){
   const old=$("sharedRoomSelect").value;
   $("sharedRoomSelect").innerHTML=roomsCache.map(r=>
@@ -884,12 +840,6 @@ $("addRoomBtn").onclick=async()=>{
 };
 
 $("logoutBtn").onclick=async()=>{
-  try{
-    const OneSignal=await oneSignalReady;
-    await OneSignal.User.removeTag("role");
-  }catch(error){
-    console.warn("관리자 태그 제거 실패:",error);
-  }
   await db.auth.signOut();
   isAdmin=false;
   currentUser=null;
