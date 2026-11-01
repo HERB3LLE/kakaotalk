@@ -112,7 +112,8 @@ h3{font-size:16px;margin:20px 0 10px}
       <h3>관리자 로그인</h3>
       <input id="adminEmail" type="email" placeholder="관리자 이메일">
       <input id="adminPassword" type="password" placeholder="비밀번호">
-      <button class="action" id="loginBtn">로그인</button>
+      <button class="action" id="loginBtn" type="button">로그인</button>
+      <div id="loginStatus" class="small" role="status"></div>
     </div>
     <div id="adminTools" class="hidden">
       <h3>채팅방 관리</h3>
@@ -182,19 +183,28 @@ let currentUser=null,currentRoom=null,currentPartner="";
 let currentVisitorId=null,isAdmin=false,realtimeChannel=null;
 let roomsCache=[],editingRoomId=null,editingSharedId=null;
 let sharedSelectedFile=null;
+let loginInProgress=false;
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
 async function start(){
-  const {data:{session}}=await db.auth.getSession();
-  if(session)currentUser=session.user;
-  else{
-    const {data,error}=await db.auth.signInAnonymously();
-    if(error){alert("익명 인증에 실패했어요.\n"+error.message);return}
-    currentUser=data.user;
+  try{
+    const {data:{session},error:sessionError}=await db.auth.getSession();
+    if(sessionError)throw sessionError;
+
+    if(session){
+      currentUser=session.user;
+    }else{
+      const {data,error}=await db.auth.signInAnonymously();
+      if(error)throw error;
+      currentUser=data.user;
+    }
+    await loadRooms();
+  }catch(error){
+    console.error("시작 오류:",error);
+    alert("사이트를 시작하지 못했어요.\n"+error.message);
   }
-  await loadRooms();
 }
 
 async function loadRooms(){
@@ -236,37 +246,23 @@ async function renderRooms(){
           console.error("미리보기 불러오기 실패:",room.id,error);
           return null;
         }
-
         return data?.[0]||null;
       })
     );
 
     results.forEach(m=>{
-      if(m){
-        latestByRoom.set(String(m.room_id),m);
-      }
+      if(m)latestByRoom.set(String(m.room_id),m);
     });
   }
 
   $("roomList").innerHTML=roomsCache.map(r=>{
-    const latest=!isAdmin
-      ?latestByRoom.get(String(r.id))
-      :null;
-
-    // 최신 메시지가 있으면 최신 메시지, 없으면 관리자가 설정한 미리보기 표시
+    const latest=!isAdmin?latestByRoom.get(String(r.id)):null;
     const preview=latest
       ?(latest.content||(latest.image_url?"사진":""))
       :(r.preview_text||"대화를 시작해 보세요.");
-
-    // 최신 메시지가 없으면 관리자가 설정한 날짜 사용
     const date=latest?.created_at||r.last_message_at||r.created_at;
-
     const dateText=date
-      ?new Date(date).toLocaleDateString("en-US",{
-        month:"numeric",
-        day:"numeric",
-        year:"2-digit"
-      })
+      ?new Date(date).toLocaleDateString("en-US",{month:"numeric",day:"numeric",year:"2-digit"})
       :"";
 
     return `<div class="room" data-room="${esc(r.id)}">
@@ -286,6 +282,7 @@ $("roomList").addEventListener("click",async e=>{
   const room=roomsCache.find(r=>String(r.id)===item.dataset.room);
   if(!room)return;
   if(!room.is_open){alert("아직 대화할 수 없는 채팅방이에요.");return}
+
   if(!isAdmin){
     let name=localStorage.getItem("chat_display_name");
     if(!name){
@@ -302,10 +299,13 @@ $("roomList").addEventListener("click",async e=>{
 async function openChat(room,visitorId=null){
   currentRoom=room.id;
   currentPartner=room.partner_name;
+
   if(isAdmin){
     currentVisitorId=visitorId||currentVisitorId;
     if(!currentVisitorId){alert("방문자 대화를 먼저 선택해 주세요.");return}
-  }else currentVisitorId=currentUser.id;
+  }else{
+    currentVisitorId=currentUser.id;
+  }
 
   $("chatProfile").innerHTML=room.avatar_url
     ?`<img src="${esc(room.avatar_url)}"><strong>${esc(room.partner_name||room.room_name)}</strong>`
@@ -404,8 +404,7 @@ async function uploadImage(file,pathPrefix){
   const ext=(file.name.split(".").pop()||"img").toLowerCase().replace(/[^a-z0-9]/g,"")||"img";
   const path=`${pathPrefix}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
   const {error}=await db.storage.from("chat-images").upload(path,file,{
-    contentType:file.type,
-    upsert:false
+    contentType:file.type,upsert:false
   });
   if(error){
     alert("사진 업로드 실패: "+error.message);
@@ -481,29 +480,91 @@ $("adminBack").onclick=()=>{
   $("adminView").style.display="none";
   $("homeView").style.display="block";
 };
-
+<script>
+/* 관리자 로그인 */
 $("loginBtn").onclick=async()=>{
+  if(loginInProgress)return;
+
   const email=$("adminEmail").value.trim();
   const password=$("adminPassword").value;
-  const {data,error}=await db.auth.signInWithPassword({email,password});
-  if(error){alert("로그인 실패: "+error.message);return}
-  currentUser=data.user;
-  const {data:row,error:checkError}=await db.from("admin_users").select("user_id").eq("user_id",currentUser.id).maybeSingle();
-  if(checkError||!row){
-    alert("관리자로 등록된 계정이 아니에요.");
-    await db.auth.signOut();
-    currentUser=null;
-    const anon=await db.auth.signInAnonymously();
-    if(!anon.error)currentUser=anon.data.user;
+  const button=$("loginBtn");
+  const status=$("loginStatus");
+
+  if(!email||!password){
+    alert("이메일과 비밀번호를 입력해 주세요.");
     return;
   }
-  isAdmin=true;
-  $("adminLogin").classList.add("hidden");
-  $("adminTools").classList.remove("hidden");
-  await loadRooms();
-  setDefaultSharedDateTime();
-  await loadVisitorThreads();
-  await loadSharedMessages();
+
+  loginInProgress=true;
+  button.disabled=true;
+  button.textContent="로그인 중...";
+  status.textContent="계정을 확인하고 있어요.";
+
+  try{
+    const {data,error}=await db.auth.signInWithPassword({email,password});
+
+    if(error){
+      throw new Error("로그인 실패: "+error.message);
+    }
+
+    if(!data.user){
+      throw new Error("로그인 계정 정보를 확인할 수 없어요.");
+    }
+
+    currentUser=data.user;
+
+    const {data:row,error:checkError}=await db
+      .from("admin_users")
+      .select("user_id")
+      .eq("user_id",currentUser.id)
+      .maybeSingle();
+
+    if(checkError){
+      throw new Error(
+        "관리자 권한 확인에 실패했어요.\n"+
+        "Supabase의 admin_users 테이블 권한을 확인해 주세요.\n\n"+
+        checkError.message
+      );
+    }
+
+    if(!row){
+      await db.auth.signOut();
+      currentUser=null;
+
+      const anon=await db.auth.signInAnonymously();
+      if(anon.error){
+        throw new Error("방문자 계정으로 돌아가지 못했어요: "+anon.error.message);
+      }
+      currentUser=anon.data.user;
+
+      throw new Error("관리자로 등록되지 않은 계정이에요.");
+    }
+
+    isAdmin=true;
+
+    $("adminLogin").classList.add("hidden");
+    $("adminTools").classList.remove("hidden");
+    status.textContent="";
+
+    await loadRooms();
+    setDefaultSharedDateTime();
+    await loadVisitorThreads();
+    await loadSharedMessages();
+
+  }catch(error){
+    console.error("관리자 로그인 오류:",error);
+    status.textContent=error.message;
+    alert(error.message);
+
+    if(!isAdmin){
+      $("adminLogin").classList.remove("hidden");
+      $("adminTools").classList.add("hidden");
+    }
+  }finally{
+    loginInProgress=false;
+    button.disabled=false;
+    button.textContent="로그인";
+  }
 };
 
 function renderSharedRoomOptions(){
@@ -511,7 +572,9 @@ function renderSharedRoomOptions(){
   $("sharedRoomSelect").innerHTML=roomsCache.map(r=>
     `<option value="${esc(r.id)}">${esc(r.room_name)}</option>`
   ).join("");
-  if(roomsCache.some(r=>String(r.id)===old))$("sharedRoomSelect").value=old;
+  if(roomsCache.some(r=>String(r.id)===old)){
+    $("sharedRoomSelect").value=old;
+  }
 }
 
 $("sharedRoomSelect").addEventListener("change",loadSharedMessages);
@@ -531,14 +594,24 @@ function setDefaultSharedDateTime(){
 
 async function loadSharedMessages(){
   if(!isAdmin)return;
+
   const roomId=$("sharedRoomSelect").value;
-  if(!roomId){$("sharedMessages").innerHTML="채팅방이 없어요.";return}
+  if(!roomId){
+    $("sharedMessages").innerHTML="채팅방이 없어요.";
+    return;
+  }
+
   const {data,error}=await db.from("messages")
     .select("*")
     .eq("room_id",roomId)
     .is("visitor_id",null)
     .order("created_at");
-  if(error){$("sharedMessages").textContent="공통 대화 불러오기 실패: "+error.message;return}
+
+  if(error){
+    $("sharedMessages").textContent="공통 대화 불러오기 실패: "+error.message;
+    return;
+  }
+
   $("sharedMessages").innerHTML=(data||[]).map(m=>`
     <div class="shared-item">
       <strong>${m.sender_type==="visitor"?"김 · 오른쪽":"노 · 왼쪽"}</strong>
@@ -555,14 +628,28 @@ $("addSharedBtn").onclick=async()=>{
   const roomId=$("sharedRoomSelect").value;
   const content=$("sharedContent").value.trim();
   const senderType=$("sharedSender").value;
-  if(!roomId){alert("채팅방을 선택해 주세요.");return}
+
+  if(!roomId){
+    alert("채팅방을 선택해 주세요.");
+    return;
+  }
+
   const file=sharedSelectedFile;
-  if(!content&&!file){alert("메시지 내용이나 사진을 추가해 주세요.");return}
+  if(!content&&!file){
+    alert("메시지 내용이나 사진을 추가해 주세요.");
+    return;
+  }
+
   const senderName=senderType==="visitor"?"김":"노";
   const dateValue=$("sharedDateTime").value;
-  if(!dateValue){alert("날짜와 시간을 선택해 주세요.");return}
+
+  if(!dateValue){
+    alert("날짜와 시간을 선택해 주세요.");
+    return;
+  }
 
   let image_url=null;
+
   if(file){
     image_url=await uploadImage(file,`shared/${roomId}`);
     if(!image_url)return;
@@ -577,12 +664,17 @@ $("addSharedBtn").onclick=async()=>{
     image_url,
     created_at:new Date(dateValue).toISOString()
   });
-  if(error){alert("공통 메시지 등록 실패: "+error.message);return}
+
+  if(error){
+    alert("공통 메시지 등록 실패: "+error.message);
+    return;
+  }
 
   $("sharedContent").value="";
   $("sharedImageInput").value="";
   $("sharedImagePreview").innerHTML="";
   sharedSelectedFile=null;
+
   setDefaultSharedDateTime();
   await loadSharedMessages();
   alert("공통 메시지를 추가했어요!");
@@ -594,38 +686,69 @@ $("sharedMessages").addEventListener("click",async e=>{
 
   if(edit){
     const id=edit.dataset.sharedEdit;
-    const {data,error}=await db.from("messages").select("*").eq("id",id).is("visitor_id",null).single();
-    if(error||!data){alert("메시지를 불러오지 못했어요.");return}
 
-    const next=prompt("공통 메시지 수정 (사진만 있는 경우 비워 두어도 돼요)",data.content||"");
+    const {data,error}=await db.from("messages")
+      .select("*")
+      .eq("id",id)
+      .is("visitor_id",null)
+      .single();
+
+    if(error||!data){
+      alert("메시지를 불러오지 못했어요.");
+      return;
+    }
+
+    const next=prompt(
+      "공통 메시지 수정 (사진만 있는 경우 비워 두어도 돼요)",
+      data.content||""
+    );
+
     if(next===null)return;
 
     const dt=new Date(data.created_at);
-    const localDt=new Date(dt.getTime()-dt.getTimezoneOffset()*60000).toISOString().slice(0,16);
-    const nextDate=prompt("날짜와 시간 수정 (YYYY-MM-DDTHH:mm)",localDt);
+    const localDt=new Date(dt.getTime()-dt.getTimezoneOffset()*60000)
+      .toISOString().slice(0,16);
+
+    const nextDate=prompt(
+      "날짜와 시간 수정 (YYYY-MM-DDTHH:mm)",
+      localDt
+    );
+
     if(nextDate===null)return;
-    if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(nextDate)||isNaN(new Date(nextDate).getTime())){
+
+    if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(nextDate)||
+       isNaN(new Date(nextDate).getTime())){
       alert("날짜 형식을 YYYY-MM-DDTHH:mm으로 입력해 주세요.");
       return;
     }
 
     let image_url=data.image_url||null;
-    const choice=prompt("사진 처리: 1 = 유지, 2 = 새 사진으로 교체, 3 = 사진 삭제","1");
+
+    const choice=prompt(
+      "사진 처리: 1 = 유지, 2 = 새 사진으로 교체, 3 = 사진 삭제",
+      "1"
+    );
+
     if(choice===null)return;
 
     if(choice==="2"){
       const picker=document.createElement("input");
       picker.type="file";
       picker.accept="image/*";
+
       const file=await new Promise(resolve=>{
         picker.onchange=()=>resolve(picker.files?.[0]||null);
         picker.click();
       });
+
       if(!file)return;
+
       image_url=await uploadImage(file,`shared/${data.room_id}`);
       if(!image_url)return;
+
     }else if(choice==="3"){
       image_url=null;
+
     }else if(choice!=="1"){
       alert("1, 2, 3 중에서 선택해 주세요.");
       return;
@@ -636,21 +759,37 @@ $("sharedMessages").addEventListener("click",async e=>{
       return;
     }
 
-    const {error:updateError}=await db.from("messages").update({
-      content:next.trim(),
-      image_url,
-      created_at:new Date(nextDate).toISOString()
-    }).eq("id",id).is("visitor_id",null);
+    const {error:updateError}=await db.from("messages")
+      .update({
+        content:next.trim(),
+        image_url,
+        created_at:new Date(nextDate).toISOString()
+      })
+      .eq("id",id)
+      .is("visitor_id",null);
 
-    if(updateError){alert("수정 실패: "+updateError.message);return}
+    if(updateError){
+      alert("수정 실패: "+updateError.message);
+      return;
+    }
+
     await loadSharedMessages();
     return;
   }
 
   if(del){
     if(!confirm("이 공통 메시지를 삭제할까요?"))return;
-    const {error}=await db.from("messages").delete().eq("id",del.dataset.sharedDelete).is("visitor_id",null);
-    if(error){alert("삭제 실패: "+error.message);return}
+
+    const {error}=await db.from("messages")
+      .delete()
+      .eq("id",del.dataset.sharedDelete)
+      .is("visitor_id",null);
+
+    if(error){
+      alert("삭제 실패: "+error.message);
+      return;
+    }
+
     await loadSharedMessages();
   }
 });
@@ -660,11 +799,17 @@ async function loadVisitorThreads(){
     .select("room_id,visitor_id,content,image_url,created_at,sender_name,sender_type")
     .not("visitor_id","is",null)
     .order("created_at",{ascending:false});
-  if(error){$("visitorThreads").textContent="대화를 불러오지 못했어요: "+error.message;return}
+
+  if(error){
+    $("visitorThreads").textContent="대화를 불러오지 못했어요: "+error.message;
+    return;
+  }
 
   const threadsMap=new Map();
+
   for(const m of data||[]){
     const key=m.room_id+"_"+m.visitor_id;
+
     if(!threadsMap.has(key)){
       threadsMap.set(key,{
         room_id:m.room_id,
@@ -674,12 +819,17 @@ async function loadVisitorThreads(){
         visitor_name:""
       });
     }
+
     const thread=threadsMap.get(key);
-    if(m.sender_type==="visitor"&&!thread.visitor_name&&m.sender_name)thread.visitor_name=m.sender_name;
+
+    if(m.sender_type==="visitor"&&!thread.visitor_name&&m.sender_name){
+      thread.visitor_name=m.sender_name;
+    }
   }
 
   $("visitorThreads").innerHTML=Array.from(threadsMap.values()).map(t=>{
     const room=roomsCache.find(r=>String(r.id)===String(t.room_id));
+
     return `<div class="thread">
       <strong>${esc(room?.room_name||"채팅방")}</strong>
       <div class="small">방문자: ${esc(t.visitor_name||"방문자")}</div>
@@ -692,10 +842,10 @@ async function loadVisitorThreads(){
 $("visitorThreads").addEventListener("click",async e=>{
   const b=e.target.closest("[data-thread-room]");
   if(!b)return;
+
   const room=roomsCache.find(r=>String(r.id)===b.dataset.threadRoom);
   if(room)await openChat(room,b.dataset.threadVisitor);
 });
-
 function renderAdminRooms(){
   $("adminRooms").innerHTML=roomsCache.map(r=>`
   <div class="admin-room">
@@ -717,6 +867,7 @@ function openProfileEditor(room){
   $("editPreviewText").value=room.preview_text||"";
 
   const date=room.last_message_at||room.created_at;
+
   $("editRoomDate").value=date
     ?new Date(new Date(date).getTime()-new Date(date).getTimezoneOffset()*60000).toISOString().slice(0,10)
     :"";
@@ -732,12 +883,18 @@ function closeProfileEditor(){
 
 function updateProfilePreview(){
   const url=$("editAvatarUrl").value.trim();
-  $("profilePreview").innerHTML=url?`<img src="${esc(url)}" onerror="this.parentElement.textContent='이미지를 불러올 수 없어요'">`:"●";
+
+  $("profilePreview").innerHTML=url
+    ?`<img src="${esc(url)}" onerror="this.parentElement.textContent='이미지를 불러올 수 없어요'">`
+    :"●";
 }
 
 $("editAvatarUrl").addEventListener("input",updateProfilePreview);
 $("cancelProfile").onclick=closeProfileEditor;
-$("profileModal").addEventListener("click",e=>{if(e.target===$("profileModal"))closeProfileEditor()});
+
+$("profileModal").addEventListener("click",e=>{
+  if(e.target===$("profileModal"))closeProfileEditor();
+});
 
 $("saveProfile").onclick=async()=>{
   if(!editingRoomId)return;
@@ -784,54 +941,80 @@ $("saveProfile").onclick=async()=>{
 async function moveRoom(roomId,direction){
   const index=roomsCache.findIndex(r=>String(r.id)===String(roomId));
   const nextIndex=index+Number(direction);
+
   if(index<0||nextIndex<0||nextIndex>=roomsCache.length)return;
 
   const reordered=[...roomsCache];
-  [reordered[index],reordered[nextIndex]]=[reordered[nextIndex],reordered[index]];
+  [reordered[index],reordered[nextIndex]]=
+    [reordered[nextIndex],reordered[index]];
 
   for(let i=0;i<reordered.length;i++){
     const {error}=await db.from("rooms")
       .update({sort_order:i})
       .eq("id",reordered[i].id);
+
     if(error){
       alert("채팅방 순서 변경 실패: "+error.message);
       await loadRooms();
       return;
     }
   }
+
   await loadRooms();
 }
 
 $("adminRooms").addEventListener("click",async e=>{
   const move=e.target.closest("[data-move-room]");
+
   if(move){
     await moveRoom(move.dataset.moveRoom,move.dataset.direction);
     return;
   }
+
   const edit=e.target.closest("[data-edit-room]");
+
   if(edit){
     const room=roomsCache.find(r=>String(r.id)===edit.dataset.editRoom);
     if(room)openProfileEditor(room);
     return;
   }
+
   const b=e.target.closest("[data-toggle]");
   if(!b)return;
-  const {error}=await db.from("rooms").update({is_open:b.dataset.open==="true"}).eq("id",b.dataset.toggle);
-  if(error)alert(error.message);
-  else await loadRooms();
+
+  const {error}=await db.from("rooms")
+    .update({is_open:b.dataset.open==="true"})
+    .eq("id",b.dataset.toggle);
+
+  if(error){
+    alert(error.message);
+  }else{
+    await loadRooms();
+  }
 });
 
 $("addRoomBtn").onclick=async()=>{
   const room_name=$("newRoomName").value.trim();
   const partner_name=$("newPartnerName").value.trim();
   const avatar_url=$("newAvatar").value.trim();
-  if(!room_name||!partner_name){alert("채팅방 이름과 상대방 이름을 입력해 주세요.");return}
+
+  if(!room_name||!partner_name){
+    alert("채팅방 이름과 상대방 이름을 입력해 주세요.");
+    return;
+  }
+
   const {error}=await db.from("rooms").insert({
-    room_name,partner_name,avatar_url,is_open:false,
-    preview_text:"대화를 시작해 보세요.",sort_order:roomsCache.length
+    room_name,
+    partner_name,
+    avatar_url,
+    is_open:false,
+    preview_text:"대화를 시작해 보세요.",
+    sort_order:roomsCache.length
   });
-  if(error)alert("채팅방 생성 실패: "+error.message);
-  else{
+
+  if(error){
+    alert("채팅방 생성 실패: "+error.message);
+  }else{
     $("newRoomName").value="";
     $("newPartnerName").value="";
     $("newAvatar").value="";
@@ -839,18 +1022,45 @@ $("addRoomBtn").onclick=async()=>{
   }
 };
 
+/* 로그아웃 */
 $("logoutBtn").onclick=async()=>{
-  await db.auth.signOut();
-  isAdmin=false;
-  currentUser=null;
-  currentVisitorId=null;
-  $("adminTools").classList.add("hidden");
-  $("adminLogin").classList.remove("hidden");
-  $("adminView").style.display="none";
-  $("homeView").style.display="block";
-  const {data,error}=await db.auth.signInAnonymously();
-  if(!error)currentUser=data.user;
-  await loadRooms();
+  try{
+    if(realtimeChannel){
+      await db.removeChannel(realtimeChannel);
+      realtimeChannel=null;
+    }
+
+    await db.auth.signOut();
+
+    isAdmin=false;
+    currentUser=null;
+    currentVisitorId=null;
+    currentRoom=null;
+
+    $("adminTools").classList.add("hidden");
+    $("adminLogin").classList.remove("hidden");
+    $("loginStatus").textContent="";
+    $("adminEmail").value="";
+    $("adminPassword").value="";
+
+    $("adminView").style.display="none";
+    $("chatView").style.display="none";
+    $("homeView").style.display="block";
+
+    const {data,error}=await db.auth.signInAnonymously();
+
+    if(error){
+      alert("방문자 계정으로 전환하지 못했어요: "+error.message);
+      return;
+    }
+
+    currentUser=data.user;
+    await loadRooms();
+
+  }catch(error){
+    console.error("로그아웃 오류:",error);
+    alert("로그아웃 중 오류가 발생했어요.\n"+error.message);
+  }
 };
 
 start();
